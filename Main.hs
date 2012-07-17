@@ -128,9 +128,9 @@ haikuProcess to s = case tavutaRuno s of
       isHaiku = counts == [5,7,5]
       tavutettu = printTavut parsed
       pptavut = foldl1 (\x y -> x ++ ('-':y)) (map show counts)
-      in io randomIO >>= \rnd -> if isHaiku
-         then saveHaiku >>
-            privmsg to ("hienoa! " ++ success !! (rnd `mod` (length success)))
+      in if isHaiku
+         then saveHaiku -- >>
+--            privmsg to ("hienoa! " ++ success !! (rnd `mod` (length success)))
          else privmsg to ("mitä jos tarkistaisit?  " ++ pptavut ++ ": " ++ tavutettu)
    where
       saveHaiku = do
