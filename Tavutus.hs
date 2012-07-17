@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Tavutus.hs
 -- Creation Date: Jul 06 2012
--- Last Modified: Jul 08 2012 [14:41:49]
+-- Last Modified: Jul 17 2012 [18:46:07]
 -- Created By :   Samuli Thomasson [SimSaladin] samuli.thomassonATgmail.com
 ------------------------------------------------------------------------------
 
@@ -30,6 +30,7 @@ module Tavutus where
 
 import Text.ParserCombinators.Parsec
 import Data.List (delete)
+import Data.Char (toUpper)
 
 kons = "BCDFGHJKLMNPRSTVZXbcdfghjklmnŋprsštvzžx"
 voks = "AEIOUYÄÖaeiouyäö"
@@ -47,17 +48,18 @@ printTavut s = foldl1 (\x y -> x ++ "; " ++ y) (map psae s)
 
 kon = oneOf kons
 vok = oneOf voks
-dift = foldl1 (<|>) (map (try . string) ["ai","ei","oi","ui","yi","äi","öi"
-                                ,"au","eu","iu","ou","ie","uo","yö"
-                                ,"äy","öy","ey","iy"])
---dift = foldl1 (<|>) (map (\(x, y) -> string (x:[y])) (zip "aeouy\228\246aeiouy\228\246ei"
---                                                          "iiiiiiiuuuuo\246yyyy"))
+dift = foldl1 (<|>) $ map (try . string) $ concatMap
+   (\[a,b] -> [toUpper a:[b], toUpper a:[toUpper b], a:[toUpper b]])
+   [ "ai","ei","oi","ui","yi","äi","öi"
+   , "au","eu","iu","ou","ie","uo","yö"
+   , "äy","öy","ey","iy"
+   ]
 
 vokDouble = foldl1 (<|>) (map (\x -> string (x:[x])) voks)
 
 tavutaRuno :: String -> Either String [[[String]]]
 tavutaRuno input = case parse parseRuno "" ((dropWhile (== ' ') input) ++ " ") of
-   Left err -> Left "Osaatko edes kirjoittaa?"
+   Left err -> Left ("Osaatko edes kirjoittaa? ("++show err++")")
    Right val -> Right $ delete [] val
 
 parseRuno :: Parser [[[String]]]
@@ -68,11 +70,12 @@ parseTavutaSanat = sepEndBy (many1 parseTavu) (many1 space)
 
 parseTavu :: Parser String
 parseTavu = do
+   puncts' <- many (noneOf (kons ++ voks ++ " ;"))
    ks <- many kon         
    v  <- try dift <|> try vokDouble <|> fmap return vok 
    ls <- try loppuuKon <|> many (try (kon `followedByY` (kon >> (try kon <|> vok))))
    puncts <- many (noneOf (kons ++ voks ++ " ;"))
-   return (ks ++ v ++ ls ++ puncts)
+   return (puncts' ++ ks ++ v ++ ls ++ puncts)
 
 loppuuKon :: Parser String
 loppuuKon = many kon >>= \r -> try $ lookAhead (noneOf (kons ++ voks)) >> return r
