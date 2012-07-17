@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Tavutus.hs
 -- Creation Date: Jul 06 2012
--- Last Modified: Jul 17 2012 [18:46:07]
+-- Last Modified: Jul 17 2012 [18:54:29]
 -- Created By :   Samuli Thomasson [SimSaladin] samuli.thomassonATgmail.com
 ------------------------------------------------------------------------------
 
@@ -49,7 +49,7 @@ printTavut s = foldl1 (\x y -> x ++ "; " ++ y) (map psae s)
 kon = oneOf kons
 vok = oneOf voks
 dift = foldl1 (<|>) $ map (try . string) $ concatMap
-   (\[a,b] -> [toUpper a:[b], toUpper a:[toUpper b], a:[toUpper b]])
+   (\[a,b] -> [toUpper a:[b], toUpper a:[toUpper b], a:[toUpper b], a:[b]])
    [ "ai","ei","oi","ui","yi","äi","öi"
    , "au","eu","iu","ou","ie","uo","yö"
    , "äy","öy","ey","iy"
