@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Tavutus.hs
 -- Creation Date: Jul 06 2012
--- Last Modified: Jul 17 2012 [18:54:29]
+-- Last Modified: Jul 19 2012 [17:04:25]
 -- Created By :   Samuli Thomasson [SimSaladin] samuli.thomassonATgmail.com
 ------------------------------------------------------------------------------
 
@@ -55,7 +55,9 @@ dift = foldl1 (<|>) $ map (try . string) $ concatMap
    , "äy","öy","ey","iy"
    ]
 
-vokDouble = foldl1 (<|>) (map (\x -> string (x:[x])) voks)
+vokDouble = foldl1 (<|>) $ map (try . string) $ concatMap
+   (\x -> [x:[x], x:[toUpper x], (toUpper x):[x], (toUpper x):[toUpper x]])
+   "aeiouyäö"
 
 tavutaRuno :: String -> Either String [[[String]]]
 tavutaRuno input = case parse parseRuno "" ((dropWhile (== ' ') input) ++ " ") of
