@@ -1,3 +1,9 @@
+------------------------------------------------------------------------------
+-- File: Mainplus.hs
+-- Creation Date: Jul 23 2012 [11:10:43]
+-- Last Modified: Jul 23 2012 [11:10:57]
+-- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
+------------------------------------------------------------------------------
 import Prelude hiding (catch)
 import Data.List (delete)
 import Network
@@ -19,6 +25,7 @@ data Bot = Bot { botSocket :: Handle
                }
 
 type Net = ReaderT Bot IO
+
 type Haiku = ReaderT (TMVar Bot) IO
 
 -- * IO Monad
@@ -29,7 +36,7 @@ main = do
    bot <- atomically $ newEmptyTMVar
    runReaderT cmdline bot
 
--- | Starts a bot in a new thread (?)
+-- | Starts a Bot's listener
 startBot :: Bot -> IO ()
 startBot bot = bracket (return bot) disconnect loop
    where disconnect = hClose . botSocket
@@ -56,36 +63,34 @@ cmdline = forever $ do
       getLine
    execCmd cmd
 
+-- | not sure if this could be done in a better way?
+net :: (a -> Haiku ()) -> Net a -> Haiku ()
+net f v = do
+   mb <- tryReadBot
+   case mb of
+      Just bot -> do
+         l <- liftIO $ runReaderT v bot
+         f l
+      Nothing -> glog "No bot connected"
+
+none = const (return ())
+
 -- | Parses a command line and executes corresponding action.
 execCmd :: String -> Haiku ()
 execCmd [] = return ()
 execCmd s
    | is "quit" = saveAndQuit
-   | is "join" = if length args /= 1
-                     then err "Syntax: join <channel>"
-                     else writeH $ joinChan (args !! 0)
-   | is "part" = if length args /= 1
-                     then err "Syntax: part <channel>"
-                     else writeH $ part (args !! 0)
-
-   | is "admin"   = tryReadBot >>= \mbot -> case (mbot, length args) of
-      (Nothing,  _) -> err "Could not admin: not connected"
-      (Just bot, 0) -> glog "Admins:" >> mapM_ (glog . (++) "  ") (botAdmins bot) -- TODO: print admins
-      (Just bot, 1) -> saveBot $ bot { botAdmins = (args !! 0) : botAdmins bot }
-      (_,        _) -> err "Syntax: admin <nick>"
-
-   | is "deadmin" = tryReadBot >>= \mbot -> case (mbot, length args) of
-      (Nothing,  _) -> err "Could not deadmin: no bot initialized"
-      (Just bot, 1) -> saveBot $ bot { botAdmins = delete (args !! 0) (botAdmins bot)}
-      (_,        _) -> err "Syntax: deadmin <nick>"
-
+   | is "join" = net none $ parseJoin args
+   | is "part" = net none $ parsePart args
+   | is "admin"   = net saveBot $ parseAdmin args
+   | is "deadmin" = net saveBot $ parseDeadmin args
    | is "connect" = parseConnect args
-   | otherwise    = liftIO $ putStrLn ("unknown command: " ++ s)
+   | otherwise    = err ("unknown command: " ++ s)
    where
       (cmd,args) = (id *** words) $ span (/= ' ') s -- TODO: support quoted arguments?
       is         = (==) cmd
 
--- | Parses a connect command
+-- | Parses a connect command and connects if no bot is currently connected.
 parseConnect :: [String] -> Haiku ()
 parseConnect args = case length args of
       3 -> tryReadBot >>= \mbot -> case mbot of
@@ -123,6 +128,38 @@ writeH msg = tryReadBot >>= \mbot -> case mbot of
       Nothing  -> glog "Failed to write to socket: not connected"
 
 -- * Net Monad
+
+logb :: String -> Net ()
+logb msg = asks botNick >>= \n -> liftIO $ putStrLn ("[" ++ n ++ "] " ++ msg)
+
+errb :: String -> Net ()
+errb = liftIO . putStrLn
+
+parseJoin :: [String] -> Net ()
+parseJoin args = if length args /= 1
+   then logb "Syntax: join <channel>"
+   else write $ joinChan (args !! 0)
+
+parsePart :: [String] -> Net ()
+parsePart args = if length args /= 1
+   then logb "Syntax: part <channel>"
+   else write $ part (args !! 0)
+
+parseAdmin :: [String] -> Net Bot
+parseAdmin args = do
+   bot <- ask
+   let admins = botAdmins bot
+      in case length args of
+         0 -> logb "Admins:" >> mapM_ (logb . (++) "  ") admins >> return bot
+         1 -> return $ bot { botAdmins = (args !! 0) : admins }
+         _ -> errb "Syntax: admin <nick>" >> return bot
+
+parseDeadmin :: [String] -> Net Bot
+parseDeadmin args = do
+   bot <- ask
+   case length args of
+      1 -> return $ bot { botAdmins = delete (args !! 0) (botAdmins bot)}
+      _ -> errb "Syntax: deadmin <nick>" >> return bot
 
 write :: Message -> Net ()
 write msg = do
