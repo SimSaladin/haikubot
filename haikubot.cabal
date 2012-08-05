@@ -1,19 +1,30 @@
-Name:             haikubot
-Version:          0.0.0
-Description:      Simple irc bot
-License:          GPL
-License-file:     LICENSE
-Author:           Samuli Thomasson
-Maintainer:       samuli.thomasson@paivola.fi
-Build-Type:       Simple
-Cabal-Version:    >=1.2
+name:             haikubot
+version:          0.0.0
+description:      Simple irc bot originally intended to check finnish haiku
+                  syllablels
+license:          BSD3
+license-file:     LICENSE
+author:           Samuli Thomasson
+maintainer:       samuli.thomasson@paivola.fi
+build-Type:       Simple
+cabal-version:    >=1.2
 
-Executable haikubot
+source-repository head
+   type:       git
+   location:   git://ssdesk.paivola.fi/haikubot.git
+
+library
+   exposed-modules: Config, Handler, Haiku, Plugins, Plugins.MPlay
+
+executable haikubot
    ghc-options:       -Wall
-   Main-is:           Mainplus.hs
-   Build-Depends:       base        >= 3       && < 5
+
+   main-is:           main.hs
+
+   build-depends:       base        >= 3       && < 5
                       , network     >= 2.3     && < 3
-                      , irc         >= 0.5     && < 0.6
-                      , utf8-string >= 0.3     && < 0.4
+                      , simpleirc   >= 0.2     && < 0.3
                       , mtl         >= 2.0     && < 2.1
                       , stm         >= 2.3     && < 2.4
+                      , text
+                      , bytestring
