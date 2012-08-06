@@ -1,161 +1,110 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 ------------------------------------------------------------------------------
 -- File: Haiku.hs
 -- Creation Date: Jul 23 2012 [11:10:43]
--- Last Modified: Aug 05 2012 [22:20:27]
+-- Last Modified: Aug 06 2012 [07:15:20]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
-
+-- |  XXX: support daemon-mode?
 module Haiku
-  ( mainWithCLI
+  ( mainWithCLI, quit
+  , spawn, connect, disconnect, listen
+  , log, logRes, raise
   ) where
 
 import           Prelude hiding (catch, getLine, putStr, putStrLn, words, log)
-import qualified Data.ByteString as B
-import           Data.List (delete)
+import           Data.ByteString (ByteString) -- so we hide the IsString instance
+import qualified Data.ByteString.Char8 as B
 import           Data.Text (Text)
 import           Data.Text.Encoding (encodeUtf8)
-import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import           Network
 import qualified Network.SimpleIRC as IRC
-import           System.Exit (exitWith, ExitCode(..))
-import           System.IO
 import           Control.Exception hiding (Handler)
 import           Control.Monad.Reader
 import           Control.Concurrent
-import           Control.Concurrent.STM
-import           Control.Arrow ((***))
 import           Text.Printf
+import           System.IO
 
+import Utils
 import Handler
-import Config
+import Connections
 
 -- | Create and execute a new handler using the supplied configuration, and
---   start the command-line interface. XXX: support daemon-mode?
+--   start the command-line interface.
 mainWithCLI :: Config -> IO ()
 mainWithCLI config = do
-    plugins <- sequence $ configPlugins config
+    plugins <- sequence $ cPlugins config
     runHandler runCLI $ Persist plugins
 
--- * Network operations
+runCLI :: Handler ()
+runCLI = forever $
+    liftIO (TIO.putStr "haikubot> " >> hFlush stdout >> TIO.getLine)
+    >>= rootCommand >>= logRes
+
+rootCommand :: Text -> Handler Result
+rootCommand input = let (cmd, args) = cmdSplit input
+                        in getPlugins >>= execRoot cmd args
 
 -- | connect to server, fork, listen.
 spawn :: Persist
       -> String
       -> Integer
       -> (Handle -> Handler a) -- ^ callback "when connected"
-      -> (a -> Handler b)      -- ^ callback "listening"
       -> (a -> Handler ())     -- ^ callback "disconnected"
+      -> (a -> Handler ())      -- ^ callback "listening"
       -> IO ThreadId
-spawn config server port connected listen disconnected = do
+spawn config server port connected listener disconnected = do
     h <- notify $ connectTo server (PortNumber $ fromIntegral port)
     hSetBuffering h NoBuffering
-    forkIO $ bracket (runHandler (connected h)  config)
-                     (\x -> runHandler (listen x)       config)
+    forkIO $ bracket (      runHandler (connected h)    config)
                      (\x -> runHandler (disconnected x) config)
+                     (\x -> runHandler (listener x)     config)
   where
     notify = bracket_ (printf "Connecting to %s... " server >> hFlush stdout)
                       (TIO.putStrLn "Connected")
 
-write :: Connection -> IRC.Command -> IO ()
-write con = B.hPutStrLn (conSocket con) . IRC.showCommand 
-
-writeRaw :: Connection -> B.ByteString -> IO ()
-writeRaw con bs = B.putStrLn bs >> B.hPutStrLn (conSocket con) bs
-
-
--- * Fundamentals
-
-cmdConnect :: Text -> Handler Result
-cmdConnect args 
-  | length params >= 6 = do
-    config <- getPersist
-    tid <- liftIO $ spawn config server port init listen dropBot
-    return $ ResSuccess $ T.pack $ show tid
-  | otherwise          = return $ ResSuccess $ getUsage "connect"
-  where
-    params = T.words args
-    server = T.unpack (params !! 0)
-    port   = read $ T.unpack (params !! 1)
-    init   = initCon (encodeUtf8 $ params !! 2) (encodeUtf8 $ params !! 3) (encodeUtf8 $ params !! 4) (encodeUtf8 $ T.concat $ drop 5 params)
-
-runCLI :: Handler ()
-runCLI = forever $
-    liftIO (TIO.putStr "haikubot> " >> hFlush stdout >> TIO.getLine)
-    >>= execCommand >>= log
-
-log :: Result -> Handler ()
-log r = liftIO $ case r of ResNone        -> return ()
-                           ResSuccess msg -> TIO.putStrLn msg
-                           ResFailure msg -> TIO.putStrLn msg
-
--- | Executes any command.
-execCommand :: Text -> Handler Result
-execCommand input
-    | T.null input' = return ResNone
-    | prefix == '@' = case cmd of
-        "quit"    -> disconnectAndQuit >> return ResNone
-        "connect" -> cmdConnect args
-        _         -> failed
-    | otherwise = return ResNone
-  where
-    input' = T.strip input
-    prefix = T.head input'
-    cmd    = T.takeWhile (/= ' ') $ T.tail input'
-    args   = T.stripStart $ T.dropWhile (/= ' ') input'
-
-    failed = return $ ResFailure ("Command not found: " `T.append` cmd)
-
-
--- * Connection handling
-
--- | Create a new Connection with supplied handle and put it in the TMVar.
-initCon :: B.ByteString -- ^ nick
-        -> B.ByteString -- ^ user
-        -> B.ByteString -- ^ address
-        -> B.ByteString -- ^ real name
+-- | Create a new connection, greet the server and and store the connection for
+-- later access.
+connect :: ByteString -- ^ nick
+        -> ByteString -- ^ user
+        -> ByteString -- ^ address
+        -> ByteString -- ^ real name
         -> Handle
-        -> Handler Connection
-initCon nick user addr real h = do
-    withConnections (\v -> readTVar v >>= writeTVar v . (c :)) >> return c
-    io $ B.hPutStrLn h $ "NICK " `B.append` nick
-    io $ B.hPutStrLn h $ B.concat ["USER ",user," ",user," ",addr," :",real]
+        -> Handler ConData
+connect nick user addr real h = do
+    insert c
+    io $ runCon c greet
     return c
   where
-    c = Connection h "" ""
+    c = ConData h "" ""
+    greet = do
+      writeRaw $ "NICK " `B.append` nick
+      writeRaw $ B.concat ["USER ",user," ",user," ",addr," :",real]
 
-dropBot :: Connection -> Handler ()
-dropBot bot = undefined
+-- | TODO: use an id!
+disconnect :: ConData -> Handler ()
+disconnect _ = raise "CRITICAL: disconnect is not implemented"
 
-listen :: Connection -> Handler ()
-listen c = forever $ do
-    bs <- io $ B.hGetLine h
-    io (putStrLn (show (IRC.parse bs)))
-    handleMsg c $ IRC.parse bs
-  where
-    h = conSocket c
+-- | Begin connection listener in a new thread.
+listen :: ConData -> Handler ()
+listen c = getPlugins >>= \plugins -> forever $ do
+  with c (readRaw >>= flip execUni plugins . IRC.parse)
 
--- | XXX: Should take the connectionId instead
-handleMsg :: Connection -> IRC.IrcMessage -> Handler ()
-handleMsg con msg = case IRC.mCode msg of
-  "PING"    -> io $ writeRaw con $ "PONG :" `B.append` (IRC.mMsg msg)
-  "PRIVMSG" -> return ()
-  _         -> return ()
-
-getUsage :: Text -> Text
-getUsage "connect" = "connect <server> <port> <nick> <user> <addr> <{realname}>"
-getUsage t         = t `T.append` ": no help available"
-
--- | run disconnect hooks on every plugin, close handles (which kills the
--- threads).
-disconnectAndQuit :: Handler ()
-disconnectAndQuit = -- TODO
-    return ()
+-- | Quits haikubot.
+quit :: Handler ()
+quit = raise "Quit not implemented"
 
 
--- * Helpers
+-- * Logging / Maintainance
 
-if' :: Bool -> a -> a -> a
-if' test t f = if test then t else f
+logRes :: Result -> Handler ()
+logRes (ResFailure msg) = raise $ encodeUtf8 msg
+logRes (ResSuccess msg) = log $ encodeUtf8 msg
+logRes _                = return ()
 
+log :: B.ByteString -> Handler ()
+log = io . B.putStrLn . ("[log] " `B.append`)
+
+raise :: B.ByteString -> Handler ()
+raise = io . B.putStrLn . ("[warn] " `B.append`)

@@ -2,21 +2,31 @@
 ------------------------------------------------------------------------------
 -- File: Plugins.hs
 -- Creation Date: Aug 05 2012 [05:38:41]
--- Last Modified: Aug 05 2012 [22:20:38]
+-- Last Modified: Aug 06 2012 [06:29:17]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | The plugin interface.
 module Plugins
-  ( Handler
-  , Plugin(..)
-  , Connection
-  , IrcMessage(..)
-  , Shared
-  , share
+  ( Handler, getPersist
+  , Plugin(Plugin, pluginPersist, pluginUni, pluginRoot), pluginUni_, pluginRoot_, Con, Shared, share
+  , writeRaw, write
   , Result(..)
+  , IrcMessage(..)
+  , Text, encodeUtf8, decodeUtf8
+  , none, failed, success
   ) where
 
-import Control.Monad.Reader
 import Network.SimpleIRC
-import Handler (Handler, Shared, share, Plugin(..), Connection, Result(..))
+import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8, decodeUtf8)
+import Connections
+import Handler
 
+none :: Monad m => m Result
+none = return ResNone
+
+failed :: Monad m => Text -> m Result
+failed = return . ResFailure
+
+success :: Monad m => Text -> m Result
+success = return . ResSuccess

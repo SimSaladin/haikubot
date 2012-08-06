@@ -16,15 +16,20 @@ source-repository head
 library
    exposed-modules: Config, Handler, Haiku, Plugins, Plugins.MPlay
 
+   extensions: OverloadedStrings
+
 executable haikubot
    ghc-options:       -Wall
 
    main-is:           main.hs
 
+   extensions: OverloadedStrings
+
    build-depends:       base        >= 3       && < 5
                       , network     >= 2.3     && < 3
                       , simpleirc   >= 0.2     && < 0.3
                       , mtl         >= 2.0     && < 2.1
+                      , transformers
                       , stm         >= 2.3     && < 2.4
                       , text
                       , bytestring

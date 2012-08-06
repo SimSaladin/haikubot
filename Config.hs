@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File: Config.hs
 -- Creation Date: Aug 05 2012 [06:14:42]
--- Last Modified: Aug 05 2012 [21:57:20]
+-- Last Modified: Aug 06 2012 [05:27:07]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Config 
@@ -10,14 +10,17 @@ module Config
   , Persist(..)
   ) where
 
-import Data.Text (Text)
 import Handler
+import qualified Fundamentals as Fund
 import qualified Plugins.MPlay as MPlay
 
--- | default configuration
-defaultConfig :: Config
-defaultConfig = Config []
-
 basicConfig :: Config
-basicConfig = Config [MPlay.instantiate] --  [ (MPlay.init, return ()) ]
+basicConfig = defaultConfig
+  { cPlugins = [ Fund.boot, MPlay.boot ] }
 
+-- | default configuration, without plugins
+defaultConfig :: Config
+defaultConfig = Config
+  { cRootPrefix = "@"
+  , cPlugins    = [ Fund.boot ]
+  }
