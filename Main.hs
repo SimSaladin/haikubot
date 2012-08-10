@@ -95,11 +95,11 @@ afterConnect = do
 
 register :: Net ()
 register = do
-   privmsg "NickServ" "REGISTER IamTehHaikuB0t simsaladin@paivola.fi"
+   privmsg "NickServ" "REGISTER password simsaladin@paivola.fi"
 
 identify :: Net ()
 identify = do
-   privmsg "NickServ" "IDENTIFY IamTehHaikuB0t"
+   privmsg "NickServ" "IDENTIFY password"
 
 privmsg :: String -> String -> Net ()
 privmsg c s = write "PRIVMSG" (c ++ " :" ++ s)
