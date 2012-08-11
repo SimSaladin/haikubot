@@ -2,10 +2,11 @@
 ------------------------------------------------------------------------------
 -- File: Haiku.hs
 -- Creation Date: Jul 23 2012 [11:10:43]
--- Last Modified: Aug 06 2012 [07:15:20]
+-- Last Modified: Aug 09 2012 [18:40:00]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
--- |  XXX: support daemon-mode?
+-- | General bot functionality.
+-- XXX: support daemon-mode?
 module Haiku
   ( mainWithCLI, quit
   , spawn, connect, disconnect, listen
@@ -16,6 +17,7 @@ import           Prelude hiding (catch, getLine, putStr, putStrLn, words, log)
 import           Data.ByteString (ByteString) -- so we hide the IsString instance
 import qualified Data.ByteString.Char8 as B
 import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as TIO
 import           Network
@@ -24,27 +26,42 @@ import           Control.Exception hiding (Handler)
 import           Control.Monad.Reader
 import           Control.Concurrent
 import           Text.Printf
+import           System.Environment (getArgs)
+import           System.Exit
 import           System.IO
 
 import Utils
 import Handler
 import Connections
 
--- | Create and execute a new handler using the supplied configuration, and
+-- | Create and execute a new handler using the supplied configuration, read a
+--   possible configuration file supplied as a command line argument and
 --   start the command-line interface.
 mainWithCLI :: Config -> IO ()
 mainWithCLI config = do
     plugins <- sequence $ cPlugins config
-    runHandler runCLI $ Persist plugins
+    boot <- getArgs >>= \as -> case as of
+      (filename:_) -> do putStrLn $ "sourcing file `" ++ filename ++ "`..."
+                         return $ sourceRootCommands filename
+      _ -> return $ return ()
+    let persist = Persist plugins
+    runHandler (boot >> runCLI) persist
 
 runCLI :: Handler ()
 runCLI = forever $
     liftIO (TIO.putStr "haikubot> " >> hFlush stdout >> TIO.getLine)
-    >>= rootCommand >>= logRes
+                                    >>= rootCommand >>= logRes
 
+-- | interpret text passed for example from the commandline
 rootCommand :: Text -> Handler Result
 rootCommand input = let (cmd, args) = cmdSplit input
                         in getPlugins >>= execRoot cmd args
+
+sourceRootCommands :: FilePath -> Handler ()
+sourceRootCommands file = do
+    h <- io $ openFile file ReadMode
+    mapM_ (rootCommand . T.pack) . lines =<< io (hGetContents h)
+    io $ hClose h
 
 -- | connect to server, fork, listen.
 spawn :: Persist
@@ -88,12 +105,12 @@ disconnect _ = raise "CRITICAL: disconnect is not implemented"
 
 -- | Begin connection listener in a new thread.
 listen :: ConData -> Handler ()
-listen c = getPlugins >>= \plugins -> forever $ do
+listen c = getPlugins >>= \plugins -> forever $
   with c (readRaw >>= flip execUni plugins . IRC.parse)
 
 -- | Quits haikubot.
 quit :: Handler ()
-quit = raise "Quit not implemented"
+quit = getPlugins >>= mapM execPluginQuit >> io exitSuccess
 
 
 -- * Logging / Maintainance
@@ -101,7 +118,7 @@ quit = raise "Quit not implemented"
 logRes :: Result -> Handler ()
 logRes (ResFailure msg) = raise $ encodeUtf8 msg
 logRes (ResSuccess msg) = log $ encodeUtf8 msg
-logRes _                = return ()
+logRes ResNone          = raise "No handler found"
 
 log :: B.ByteString -> Handler ()
 log = io . B.putStrLn . ("[log] " `B.append`)

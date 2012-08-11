@@ -14,7 +14,7 @@ source-repository head
    location:   git://ssdesk.paivola.fi/haikubot.git
 
 library
-   exposed-modules: Config, Handler, Haiku, Plugins, Plugins.MPlay
+   exposed-modules: Config, Handler, Haiku, Plugins, Plugins.MPlay, Tavutus
 
    extensions: OverloadedStrings
 
@@ -33,3 +33,5 @@ executable haikubot
                       , stm         >= 2.3     && < 2.4
                       , text
                       , bytestring
+                      , parsec
+                      , directory

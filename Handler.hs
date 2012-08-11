@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File: Handler.hs
 -- Creation Date: Aug 05 2012 [05:15:24]
--- Last Modified: Aug 06 2012 [07:15:50]
+-- Last Modified: Aug 09 2012 [22:19:42]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Handler
@@ -19,12 +19,14 @@ module Handler
   , Plugin(..)
   , Shared
   , share
+  , getShare
   , pluginUni_
   , pluginRoot_
 
   -- * Interaction
   , execPluginUni
   , execPluginRoot
+  , execPluginQuit
   , execRoot
   , execUni
 
@@ -34,6 +36,7 @@ module Handler
   , withConnections
   , getPersist
   , getPlugins
+  , onSource
   ) where
 
 import Prelude hiding (log)
@@ -46,10 +49,11 @@ import Utils
 import Connections
 
 -- | Network connections are carried in the Handler monad.
--- XXX: should be an a id-value pair.
+-- XXX: should be an a id-value pair?
 type Connections = TVar [ConData]
 
--- | Handler provides access to all connections. Use with care!
+-- | Handler provides access to all connections, configuration. The generic
+--   monad for plugins.
 newtype Handler a = Handler {
     runH :: ReaderT Connections (ReaderT Persist IO) a
   } deriving (Monad, MonadIO, MonadReader Connections)
@@ -65,7 +69,7 @@ data Config = Config
   , cPlugins    :: [IO Plugin]
   }
 
--- | Handler state. Consistent among listener threads.
+-- | 
 data Persist = Persist { persistPlugins :: [Plugin] }
 
 -- |
@@ -74,12 +78,12 @@ data Result = ResNone | ResSuccess Text | ResFailure Text
 
 -- * Plugin stuff
 
--- | XXX: Use some typeclass instead of ?
+-- | XXX: Use some typeclass instead?
 data Plugin = forall env. Plugin
   { pluginPersist :: Shared env
-  , pluginUni :: Shared env -> IrcMessage -> Con Result
-  , pluginRoot :: Shared env -> Text -> Text -> Handler Result
---  , pluginAny :: Shared env -> IrcMessage -> Handler Result
+  , pluginUni     :: Shared env -> IrcMessage -> Con Result
+  , pluginRoot    :: Shared env -> Text -> Text -> Handler Result
+--, pluginAny     :: Shared env -> IrcMessage -> Handler Result
   }
 
 pluginUni_ :: a -> b -> Con Result
@@ -93,17 +97,26 @@ type Shared = TVar
 share :: a -> IO (Shared a)
 share = atomically . newTVar
 
+getShare :: MonadIO m => Shared a -> m a
+getShare = io . readTVarIO
+
 execPluginUni :: Plugin -> IrcMessage -> Con Result
 execPluginUni Plugin{ pluginPersist = p, pluginUni = f } = f p
 
 execPluginRoot :: Plugin -> Text -> Text -> Handler Result
 execPluginRoot Plugin{ pluginPersist = p, pluginRoot = f } = f p
 
+execPluginQuit :: Plugin -> Handler ()
+execPluginQuit Plugin{ pluginPersist = p, pluginUni = f } = return () -- TODO
+
 
 -- * Handler functions
 
 getPersist :: Handler Persist
 getPersist = Handler $ lift ask
+
+onSource :: Con a -> Handler a
+onSource action = undefined -- TODO
 
 getPlugins :: Handler [Plugin]
 getPlugins = Handler $ lift $ asks persistPlugins

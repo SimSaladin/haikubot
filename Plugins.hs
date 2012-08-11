@@ -1,17 +1,18 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 ------------------------------------------------------------------------------
 -- File: Plugins.hs
 -- Creation Date: Aug 05 2012 [05:38:41]
--- Last Modified: Aug 06 2012 [06:29:17]
+-- Last Modified: Aug 09 2012 [22:19:40]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | The plugin interface.
 module Plugins
   ( Handler, getPersist
-  , Plugin(Plugin, pluginPersist, pluginUni, pluginRoot), pluginUni_, pluginRoot_, Con, Shared, share
-  , writeRaw, write
+  , onSource    -- ^ Perform on the source
+  , Plugin(Plugin, pluginPersist, pluginUni, pluginRoot), pluginUni_, pluginRoot_
+  , Con, Shared, share, getShare
+  , writeRaw, writeText, write
   , Result(..)
-  , IrcMessage(..)
+  , IrcMessage(..), Command(..)
   , Text, encodeUtf8, decodeUtf8
   , none, failed, success
   ) where

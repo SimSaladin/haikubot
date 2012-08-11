@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File: Fundamentals.hs
 -- Creation Date: Aug 06 2012 [03:16:19]
--- Last Modified: Aug 06 2012 [06:32:36]
+-- Last Modified: Aug 09 2012 [16:53:49]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | Fundamental functionalities for haikubot.
@@ -31,16 +31,15 @@ handleUni _ msg = case mCode msg of
   _      -> none
 
 handleRoot :: Shared Env -> Text -> Text -> Handler Result
-handleRoot   _ "help" arg
+handleRoot _ "help" arg
   | arg ==       ""  = failed "haikubot: global help is not implemented"
   | arg == "connect" = success "usage: connect <server> <port> <nick> <user> <addr> <{realname}>"
   | otherwise        = none
-
-handleRoot _ "quit" _ = quit >> failed "hm.. I'm supposed to be dead by now.."
-
+handleRoot _  "quit" _ = quit >> failed "hm.. I'm supposed to be dead by now.."
 handleRoot env cmd arg
   | cmd == "connect"    = parseConnect arg
   | cmd == "disconnect" = failed "no disconnect yet"
+  | cmd == "rawirc"     = onSource (writeText arg) >> return (ResSuccess "")
   | otherwise = none
 
 parseConnect :: Text -> Handler Result
