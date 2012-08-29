@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File: Haiku.hs
 -- Creation Date: Jul 23 2012 [11:10:43]
--- Last Modified: Aug 09 2012 [18:40:00]
+-- Last Modified: Aug 18 2012 [22:38:46]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | General bot functionality.
@@ -16,12 +16,14 @@ module Haiku
 import           Prelude hiding (catch, getLine, putStr, putStrLn, words, log)
 import           Data.ByteString (ByteString) -- so we hide the IsString instance
 import qualified Data.ByteString.Char8 as B
+import qualified Data.Map as Map
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as TIO
 import           Network
 import qualified Network.SimpleIRC as IRC
+import           Control.Arrow ((***))
 import           Control.Exception hiding (Handler)
 import           Control.Monad.Reader
 import           Control.Concurrent
@@ -38,29 +40,28 @@ import Connections
 --   possible configuration file supplied as a command line argument and
 --   start the command-line interface.
 mainWithCLI :: Config -> IO ()
-mainWithCLI config = do
-    plugins <- sequence $ cPlugins config
+mainWithCLI Config{ cPlugins = cplugins, cRootPrefix = crootPrefix } = do
+    plugins <- sequence cplugins
     boot <- getArgs >>= \as -> case as of
       (filename:_) -> do putStrLn $ "sourcing file `" ++ filename ++ "`..."
                          return $ sourceRootCommands filename
       _ -> return $ return ()
-    let persist = Persist plugins
-    runHandler (boot >> runCLI) persist
+    runHandler (boot >> runCLI) (Persist (Map.fromList plugins) crootPrefix)
 
 runCLI :: Handler ()
 runCLI = forever $
     liftIO (TIO.putStr "haikubot> " >> hFlush stdout >> TIO.getLine)
-                                    >>= rootCommand >>= logRes
+                                    >>= rootCommand Nothing >>= logRes
 
 -- | interpret text passed for example from the commandline
-rootCommand :: Text -> Handler Result
-rootCommand input = let (cmd, args) = cmdSplit input
-                        in getPlugins >>= execRoot cmd args
+rootCommand :: Maybe IRC.IrcMessage -> Text -> Handler Result
+rootCommand mmsg input = let (cmd, args) = cmdSplit input
+                         in getPlugins >>= execRoot cmd args mmsg . Map.elems
 
 sourceRootCommands :: FilePath -> Handler ()
 sourceRootCommands file = do
     h <- io $ openFile file ReadMode
-    mapM_ (rootCommand . T.pack) . lines =<< io (hGetContents h)
+    mapM_ (rootCommand Nothing . T.pack) . lines =<< io (hGetContents h)
     io $ hClose h
 
 -- | connect to server, fork, listen.
@@ -105,12 +106,12 @@ disconnect _ = raise "CRITICAL: disconnect is not implemented"
 
 -- | Begin connection listener in a new thread.
 listen :: ConData -> Handler ()
-listen c = getPlugins >>= \plugins -> forever $
-  with c (readRaw >>= flip execUni plugins . IRC.parse)
+listen c = local (const (Just c) *** id) $ getPlugins >>= forever . parse . Map.elems
+  where parse plugins = execUni plugins . IRC.parse =<< with c readRaw
 
 -- | Quits haikubot.
 quit :: Handler ()
-quit = getPlugins >>= mapM execPluginQuit >> io exitSuccess
+quit = getPlugins >>= mapM execPluginQuit . Map.elems >> io exitSuccess
 
 
 -- * Logging / Maintainance

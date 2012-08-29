@@ -35,3 +35,5 @@ executable haikubot
                       , bytestring
                       , parsec
                       , directory
+                      , random
+                      , containers

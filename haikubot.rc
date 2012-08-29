@@ -1,1 +1,1 @@
-connect irc.paivola.fi 6667 haikumeh 0 * Bot
+connect irc.paivola.fi 6667 haikubot haikubot * Bot

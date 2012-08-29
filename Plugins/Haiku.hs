@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haiku.hs
 -- Creation Date: Aug 09 2012 [18:48:17]
--- Last Modified: Aug 09 2012 [22:21:54]
+-- Last Modified: Aug 19 2012 [15:14:34]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | 
@@ -13,59 +13,91 @@
 --  Commands:
 --    haiku! -- reply a random haiku
 --
-module Plugins.Haiku where
+module Plugins.Haiku (boot) where
 
 import Control.Monad
-import Data.Maybe (fromMaybe)
 import Data.ByteString (ByteString)
 import qualified Data.Text as T
+import qualified Data.Map as Map
 import System.Directory (doesFileExist)
 import System.Random (randomIO)
 
 import Plugins
 import Utils
-
 import Tavutus (tavutaRuno, printTavut)
 
-boot :: IO Plugin
+boot :: IO (Text, Plugin)
 boot = do
-  env <- share $ Env [] "/home/sim/docs/haikuja.txt"
-  return $ Plugin { pluginPersist = env
-                  , pluginUni     = handleUni
-                  , pluginRoot    = handleRoot
-                  }
+  env <- share $ Env ["#haiku", "#haiku-testing"] "/home/sim/docs/haikut.txt" Map.empty
+  return $ (,) "Haiku" $ Plugin { pluginPersist = env
+                                , pluginUni     = handleUni
+                                , pluginRoot    = handleRoot
+                                }
 
-data Env = Env { eChannel   :: ByteString
-               , eHaikuFile :: FilePath
+data Env = Env { eChannels   :: [ByteString] -- ^ Channels where only haikus are permitted
+               , eHaikuFile  :: FilePath     -- ^ File to save/read haikus
+               , eHaikuFails :: Map.Map ByteString Int
                }
 
-handleRoot :: Shared Env -> IrcMessage -> Handler Result
-handleRoot env IrcMessage{ mCode = mcode, mOrigin = origin, mMsg = msg }
-  | otherwise = undefined
-
-handleUni :: Shared Env -> IrcMessage -> Con Result
-handleUni env IrcMessage{ mCode = mcode, mOrigin = origin, mMsg = msg }
-  | mcode == "PRIVMSG" = case origin of
-    Just dest -> do
-        env' <- getShare env
-        let notice r = case r of Nothing -> return ()
-                                 Just r' -> write $ MNotice (eChannel env') (mOrigin ++ ": " ++ r')
-        if dest == eChannel env'
-          then handleHaiku (eHaikuFile env') msg' >>= reply
-          else if prefixed
-            then liftM2 notice reply =<< handleHaiku (eHaikuFile env') (T.drop 2 msg')
-            else none
-        where reply r = case r of
-                  Nothing -> success "haiku success"
-                  Just r' -> write (MPrivmsg dest $ encodeUtf8 r') >> reply Nothing
-              prefixed = T.take 2 msg' == "; "
-    Nothing -> none
+handleRoot :: Shared Env -> Text -> Text -> Maybe IrcMessage -> Handler Result
+handleRoot env cmd arg mmsg
+  | cmd == "haiku?" = do
+      a <- io . getRandomHaiku =<< liftM eHaikuFile (getShare env)
+      case mmsg of
+        Nothing -> failed "no origin"
+        Just IrcMessage{mOrigin = morigin} -> case morigin of
+          Nothing     -> failed "no origin"
+          Just origin -> reply $ MPrivmsg origin $ encodeUtf8 $ case a of
+            Left reason -> reason
+            Right haiku -> haiku
+  | cmd == "haiku" = do
+      haikuFile <- liftM eHaikuFile $ getShare env
+      mdesc <- handleHaiku haikuFile arg
+      case mdesc of
+        Nothing   -> success "haiku success"
+        Just desc -> case mmsg of
+          Nothing -> failed "origin n/a. haiku channels have been notified"
+          Just IrcMessage{ mOrigin = morigin } -> case morigin of
+            Just origin -> reply (MPrivmsg origin $ encodeUtf8 desc)
+            Nothing     -> failed "no origin."
   | otherwise = none
-  where msg' = decodeUtf8 msg
 
-handleHaiku :: FilePath -> Text -> Con (Maybe Text)
+handleUni :: Shared Env -> IrcMessage -> Handler Result
+handleUni env IrcMessage{ mNick = mnick, mCode = mcode, mOrigin = morigin, mMsg = msg }
+  | mcode == "PRIVMSG" = case (mnick, morigin) of
+    (Just nick, Just origin) -> do
+        env'@Env{ eChannels = channels, eHaikuFile = haikuFile, eHaikuFails = haikuFails } <- getShare env
+        if origin `elem` channels
+          then do
+              mdesc <- handleHaiku haikuFile (if' prefixed (T.drop 2 msg') msg')
+              case mdesc of
+                Nothing   -> success "haiku success"
+                Just desc -> reply (MPrivmsg origin $ encodeUtf8 desc)
+          else none
+    _ -> none
+  | otherwise = none
+  where
+    msg'     = decodeUtf8 msg
+    prefixed = T.take 2 msg' == "; "
+
+--removeFails :: Env -> Text -> Handler ()
+--removeFails env who = setShare $ env { eHaikuFails = Map.insert who 0 (eHaikuFails env) }
+--
+--handleFail :: Env -> Text -> Handler ()
+--handleFail env who = let (mfails, hfails) = Map.insertLookupWithKey (\_ a b -> a + b) who 1 env
+--                     in case mfails of
+--                          Just fails -> if fails > 2 then kickUser who else return ()
+--                          Nothing -> return ()
+--                        setShare $ env { eHaikuFails = hfails }
+--
+--kickUser :: Text -> Handler ()
+--kickUser who = reply $ MKick _ who ""
+
+handleHaiku :: FilePath -- ^ haiku file
+            -> Text     -- ^ text to parse
+            -> Handler (Maybe Text) -- ^ `Nothing` if @text@ is haiku; `Just description` if not
 handleHaiku file text = case tavutaRuno (T.unpack text) of
-  Left err    -> return $ Just $ T.pack err
+  Left err    -> return $ Just "osaatko edes kirjoittaa?" -- $ T.pack err
   Right tavut -> let
     rytmi   = rytmit tavut
     pptavut = foldl1 (\x y -> x ++ ('-':y)) (map show rytmi)
@@ -76,19 +108,17 @@ handleHaiku file text = case tavutaRuno (T.unpack text) of
     save = do
       exists <- io $ doesFileExist file
       io $ (if exists then appendFile else writeFile) file (T.unpack text ++ "\n")
-  
-getRandom :: FilePath -> Con Text
-getRandom fp = do
-  exists <- io $ doesFileExist fp
+
+getRandomHaiku :: FilePath -> IO (Either Text Text)
+getRandomHaiku fp = do
+  exists <- doesFileExist fp
   if exists
     then do
-      lns <- liftM lines . io $ readFile fp
-      if length lns < 1
-         then return "i haz no haikuz!"
-         else do
-          rnd <- io randomIO
-          return $ lns !! (rnd `mod` (length lns))
-    else return "i haz no haikufilez!!"
+      lns <- liftM lines (readFile fp)
+      if length lns >= 1
+         then randomIO >>= return . Right . T.pack . (!!) lns . (`mod` (length lns))
+         else return $ Left "i haz no haikuz!"
+    else return $ Left "i haz no haikufilez!!"
 
 isHaiku :: [Int] -> Bool
 isHaiku = (==) [5,7,5]
