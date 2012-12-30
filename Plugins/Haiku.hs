@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haiku.hs
 -- Creation Date: Aug 09 2012 [18:48:17]
--- Last Modified: Aug 19 2012 [15:14:34]
+-- Last Modified: Dec 29 2012 [19:38:18]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | 
@@ -21,7 +21,6 @@ import qualified Data.Text as T
 import qualified Data.Map as Map
 import System.Directory (doesFileExist)
 import System.Random (randomIO)
-
 import Plugins
 import Utils
 import Tavutus (tavutaRuno, printTavut)

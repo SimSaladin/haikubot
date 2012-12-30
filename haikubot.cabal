@@ -14,7 +14,14 @@ source-repository head
    location:   git://ssdesk.paivola.fi/haikubot.git
 
 library
-   exposed-modules: Config, Handler, Haiku, Plugins, Plugins.MPlay, Tavutus
+   exposed-modules: Config
+                  , Handler
+                  , Tavutus
+                  , Plugins
+                  , Plugins.MPlay
+                  , Bot
+
+   other-modules: Internal
 
    extensions: OverloadedStrings
 
@@ -26,11 +33,10 @@ executable haikubot
    extensions: OverloadedStrings
 
    build-depends:       base        >= 3       && < 5
-                      , network     >= 2.3     && < 3
-                      , simpleirc   >= 0.2     && < 0.3
-                      , mtl         >= 2.0     && < 2.1
+                      , network     >= 2.4     && < 3
+                      , mtl         >= 2.1     && < 2.2
                       , transformers
-                      , stm         >= 2.3     && < 2.4
+                      , stm         >= 2.4     && < 2.5
                       , text
                       , bytestring
                       , parsec

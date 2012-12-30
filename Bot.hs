@@ -1,16 +1,24 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 ------------------------------------------------------------------------------
--- File: Haiku.hs
+-- File: Bot.hs
 -- Creation Date: Jul 23 2012 [11:10:43]
--- Last Modified: Aug 18 2012 [22:38:46]
+-- Last Modified: Dec 30 2012 [04:10:36]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
--- | General bot functionality.
--- XXX: support daemon-mode?
-module Haiku
-  ( mainWithCLI, quit
+
+-- | General bot functionalities.
+module Bot
+  ( mainWithCLI
+  , quit
+
+  -- * 
   , spawn, connect, disconnect, listen
   , log, logRes, raise
+
+  , module Utils
+  , module Internal.Types
+  , module Internal.Actions
+  , module Internal.Connections
+  , module Internal.Messages
   ) where
 
 import           Prelude hiding (catch, getLine, putStr, putStrLn, words, log)
@@ -22,7 +30,6 @@ import qualified Data.Text as T
 import           Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as TIO
 import           Network
-import qualified Network.SimpleIRC as IRC
 import           Control.Arrow ((***))
 import           Control.Exception hiding (Handler)
 import           Control.Monad.Reader
@@ -33,54 +40,21 @@ import           System.Exit
 import           System.IO
 
 import Utils
-import Handler
-import Connections
+import Internal.Messages
+import Internal.Types
+import Internal.Connections
+import Internal.Actions
+import Internal.Listen
+import Internal.Settings
+import Internal.CLI
 
--- | Create and execute a new handler using the supplied configuration, read a
---   possible configuration file supplied as a command line argument and
---   start the command-line interface.
+-- | Main entry point.
+--
+-- Create and execute a new handler using the supplied configuration, read a
+-- possible configuration file supplied as a command line argument and
+-- start the command-line interface.
 mainWithCLI :: Config -> IO ()
-mainWithCLI Config{ cPlugins = cplugins, cRootPrefix = crootPrefix } = do
-    plugins <- sequence cplugins
-    boot <- getArgs >>= \as -> case as of
-      (filename:_) -> do putStrLn $ "sourcing file `" ++ filename ++ "`..."
-                         return $ sourceRootCommands filename
-      _ -> return $ return ()
-    runHandler (boot >> runCLI) (Persist (Map.fromList plugins) crootPrefix)
-
-runCLI :: Handler ()
-runCLI = forever $
-    liftIO (TIO.putStr "haikubot> " >> hFlush stdout >> TIO.getLine)
-                                    >>= rootCommand Nothing >>= logRes
-
--- | interpret text passed for example from the commandline
-rootCommand :: Maybe IRC.IrcMessage -> Text -> Handler Result
-rootCommand mmsg input = let (cmd, args) = cmdSplit input
-                         in getPlugins >>= execRoot cmd args mmsg . Map.elems
-
-sourceRootCommands :: FilePath -> Handler ()
-sourceRootCommands file = do
-    h <- io $ openFile file ReadMode
-    mapM_ (rootCommand Nothing . T.pack) . lines =<< io (hGetContents h)
-    io $ hClose h
-
--- | connect to server, fork, listen.
-spawn :: Persist
-      -> String
-      -> Integer
-      -> (Handle -> Handler a) -- ^ callback "when connected"
-      -> (a -> Handler ())     -- ^ callback "disconnected"
-      -> (a -> Handler ())      -- ^ callback "listening"
-      -> IO ThreadId
-spawn config server port connected listener disconnected = do
-    h <- notify $ connectTo server (PortNumber $ fromIntegral port)
-    hSetBuffering h NoBuffering
-    forkIO $ bracket (      runHandler (connected h)    config)
-                     (\x -> runHandler (disconnected x) config)
-                     (\x -> runHandler (listener x)     config)
-  where
-    notify = bracket_ (printf "Connecting to %s... " server >> hFlush stdout)
-                      (TIO.putStrLn "Connected")
+mainWithCLI conf = runHandler (readRC >> runCLI) conf
 
 -- | Create a new connection, greet the server and and store the connection for
 -- later access.
@@ -99,6 +73,17 @@ connect nick user addr real h = do
     greet = do
       writeRaw $ "NICK " `B.append` nick
       writeRaw $ B.concat ["USER ",user," ",user," ",addr," :",real]
+
+-- | interpret text passed for example from the commandline
+rootCommand :: Maybe IRC.IrcMessage -> Text -> Handler Result
+rootCommand mmsg input = let (cmd, args) = cmdSplit input
+                         in getPlugins >>= execRoot cmd args mmsg . Map.elems
+
+sourceRootCommands :: FilePath -> Handler ()
+sourceRootCommands file = do
+    h <- io $ openFile file ReadMode
+    mapM_ (rootCommand Nothing . T.pack) . lines =<< io (hGetContents h)
+    io $ hClose h
 
 -- | TODO: use an id!
 disconnect :: ConData -> Handler ()
