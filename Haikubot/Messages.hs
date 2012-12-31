@@ -17,7 +17,7 @@
 --
 ------------------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
-module Internal.Messages
+module Haikubot.Messages
   ( IrcMessage(..)
   , Command(..)
   , parse

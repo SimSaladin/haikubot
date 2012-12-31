@@ -14,19 +14,19 @@ source-repository head
    location:   git://ssdesk.paivola.fi/haikubot.git
 
 library
-   exposed-modules: Bot
-                  , Config
+   exposed-modules: Haikubot
+                  , Haikubot.Actions
+                  , Haikubot.CLI
+                  , Haikubot.Commands
+                  , Haikubot.Connections
+                  , Haikubot.Core
+                  , Haikubot.Logging
+                  , Haikubot.Main
+                  , Haikubot.Messages
+                  , Haikubot.Settings
+                  , Haikubot.Plugins.Basics
+                  , Haikubot.Plugins.Runot
                   , Tavutus
-                  , Utils
-                  , Plugins.Runot
-
-   other-modules: Internal.Actions
-                , Internal.CLI
-                , Internal.Commands
-                , Internal.Connections
-                , Internal.Messages
-                , Internal.Settings
-                , Internal.Types
 
    extensions: OverloadedStrings
 
@@ -38,13 +38,12 @@ executable haikubot
    extensions: OverloadedStrings
 
    build-depends:       base        >= 3       && < 5
+                      , containers
+                      , directory
                       , network     >= 2.4     && < 3
-                      , mtl         >= 2.1     && < 2.2
-                      , transformers
+                      , parsec
+                      , random
                       , stm         >= 2.4     && < 2.5
                       , text
-                      , bytestring
-                      , parsec
-                      , directory
-                      , random
-                      , containers
+                      , transformers
+                      , mtl

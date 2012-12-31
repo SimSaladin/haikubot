@@ -1,11 +1,11 @@
 {-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, ExistentialQuantification #-}
 ------------------------------------------------------------------------------
--- File:          Internal.hs
+-- File:          Haikubot.hs
 -- Creation Date: Dec 29 2012 [20:19:14]
--- Last Modified: Dec 31 2012 [07:21:33]
+-- Last Modified: Dec 31 2012 [08:50:27]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
-module Internal.Types
+module Haikubot.Core
   ( Config(..)
   , Res(..)
   , Handler
@@ -15,6 +15,7 @@ module Internal.Types
   , getBotData
   , getConfig
   
+  -- * Action
   , ActionData(..)
   , Action
   , runAction
@@ -46,7 +47,7 @@ import           Control.Monad.Reader.Class (MonadReader, ask)
 import           Control.Monad.IO.Class
 import           Network                (PortID)
 import           System.IO              (Handle)
-import           Internal.Messages
+import           Haikubot.Messages
 
 -- * Handler
 

@@ -1,12 +1,12 @@
 {-# LANGUAGE RankNTypes #-}
 ------------------------------------------------------------------------------
--- File:          Internal/Actions.hs
+-- File:          Haikubot/Actions.hs
 -- Creation Date: Dec 29 2012 [23:59:51]
--- Last Modified: Dec 31 2012 [07:18:48]
+-- Last Modified: Dec 31 2012 [09:03:29]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | General actions.
-module Internal.Actions
+module Haikubot.Actions
   ( getPlugin
   , onPlugins
   , writeCommand
@@ -28,10 +28,10 @@ import Data.Text (Text)
 import Data.Maybe (catMaybes)
 import qualified Data.Map as Map
 
-import Internal.Types
-import Internal.Connections
-import Internal.Messages
-import Logging
+import Haikubot.Core
+import Haikubot.Connections
+import Haikubot.Messages
+import Haikubot.Logging
 
 
 -- * Con on Action

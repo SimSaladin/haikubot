@@ -1,16 +1,16 @@
 ------------------------------------------------------------------------------
--- File:          Internal/Settings.hs
+-- File:          Haikubot/Settings.hs
 -- Creation Date: Dec 30 2012 [03:40:24]
--- Last Modified: Dec 31 2012 [02:39:46]
+-- Last Modified: Dec 31 2012 [09:03:43]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | Configuration and settings.
-module Internal.Settings where
+module Haikubot.Settings where
 
 import           System.Environment (getArgs)
-import           Internal.Types
-import           Internal.Commands
-import           Logging
+import           Haikubot.Core
+import           Haikubot.Commands
+import           Haikubot.Logging
 
 -- | Read and parse the .rc
 -- XXX: should be "read command line arguments"

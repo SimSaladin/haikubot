@@ -1,11 +1,11 @@
 {-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, OverloadedStrings #-}
 ------------------------------------------------------------------------------
--- File:          Internal.hs
+-- File:          Haikubot.hs
 -- Creation Date: Dec 29 2012 [20:19:14]
--- Last Modified: Dec 31 2012 [07:21:37]
+-- Last Modified: Dec 31 2012 [10:03:34]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
-module Internal.Connections
+module Haikubot.Connections
   ( makeConnection
   , getCon
 
@@ -24,14 +24,13 @@ import           Control.Concurrent     (forkIO, ThreadId)
 import           Control.Concurrent.STM
 import           Control.Exception      (bracket_)
 import           Control.Monad
-import           Control.Monad.Reader
 import           Text.Printf            (printf)
 import           Network                ( PortID, connectTo )
 import           System.IO              ( hSetBuffering, hFlush
                                         , BufferMode(NoBuffering), stdout
                                         )
-import           Internal.Types
-import           Internal.Messages
+import           Haikubot.Core
+import           Haikubot.Messages
 
 
 makeConnection :: ConId   -- ^ Identifier to use
@@ -94,11 +93,12 @@ deleteCon conId _ = do
   onConnections (\cs -> (Map.delete conId cs, ()))
 
 onConnections :: (Connections -> (Connections, a)) -> Handler a
-onConnections f = liftIO =<< asks (atomically . action . botConnections) where
+onConnections f = liftIO . atomically . action . botConnections =<< getBotData
+    where
   action v = do (v', r) <- liftM f (readTVar v)
                 writeTVar v v'
                 return r
 
 -- | Efficiently get connections.
 getConnections :: Handler Connections
-getConnections = liftIO =<< asks (readTVarIO . botConnections)
+getConnections = liftIO . readTVarIO . botConnections =<< getBotData

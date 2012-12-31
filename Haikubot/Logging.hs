@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 -- File:          Logging.hs
 -- Creation Date: Dec 31 2012 [00:12:31]
--- Last Modified: Dec 31 2012 [07:00:06]
+-- Last Modified: Dec 31 2012 [09:02:23]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 --
 -- | Haikubot logging
-module Logging 
+module Haikubot.Logging 
   ( logInfo
   , logInfo'
   , logErr
@@ -17,7 +17,7 @@ import            Data.Text       (Text)
 import            Data.Monoid     (mappend)
 import qualified  Data.Text       as T
 import qualified  Data.Text.IO    as T
-import            Internal.Types
+import            Haikubot.Core
 
 logInfo' :: Show s => s -> Handler ()
 logInfo' = liftIO . print

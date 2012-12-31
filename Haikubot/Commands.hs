@@ -1,10 +1,10 @@
 ------------------------------------------------------------------------------
--- File:          Internal/Commands.hs
+-- File:          Haikubot/Commands.hs
 -- Creation Date: Dec 30 2012 [04:09:45]
--- Last Modified: Dec 31 2012 [04:51:39]
+-- Last Modified: Dec 31 2012 [09:41:33]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
-module Internal.Commands
+module Haikubot.Commands
   ( Cmd
   , runCmd
   , runCmd'
@@ -19,14 +19,14 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import System.IO (openFile, hClose, IOMode(ReadMode))
 
-import Internal.Types
-import Internal.Actions
-import Internal.Messages
+import Haikubot.Core
+import Haikubot.Actions
+import Haikubot.Messages
+
+type Cmd = (Text, [Text])
 
 runMsg :: Maybe Con -> Maybe IrcMessage -> Handler ()
 runMsg mcon mmsg = liftM mconcat $ onPlugins mmsg mcon handlePrivmsg
-
-type Cmd = (Text, [Text])
 
 -- | TODO: support quoting.
 parseCmd :: Text -> Cmd
