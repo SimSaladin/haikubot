@@ -14,14 +14,19 @@ source-repository head
    location:   git://ssdesk.paivola.fi/haikubot.git
 
 library
-   exposed-modules: Config
-                  , Handler
+   exposed-modules: Bot
+                  , Config
                   , Tavutus
-                  , Plugins
-                  , Plugins.MPlay
-                  , Bot
+                  , Utils
+                  , Plugins.Runot
 
-   other-modules: Internal
+   other-modules: Internal.Actions
+                , Internal.CLI
+                , Internal.Commands
+                , Internal.Connections
+                , Internal.Messages
+                , Internal.Settings
+                , Internal.Types
 
    extensions: OverloadedStrings
 

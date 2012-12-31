@@ -2,12 +2,19 @@
 ------------------------------------------------------------------------------
 -- File:          Internal.hs
 -- Creation Date: Dec 29 2012 [20:19:14]
--- Last Modified: Dec 30 2012 [03:56:26]
+-- Last Modified: Dec 31 2012 [07:21:37]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Internal.Connections
   ( makeConnection
   , getCon
+
+  , readLine
+  , readLine'
+  , writeLine
+  , writeCmd
+  , writeLine'
+  , writeCmd'
   ) where
 
 import           Data.Text              (Text)
@@ -23,9 +30,9 @@ import           Network                ( PortID, connectTo )
 import           System.IO              ( hSetBuffering, hFlush
                                         , BufferMode(NoBuffering), stdout
                                         )
-import Internal.Types
+import           Internal.Types
+import           Internal.Messages
 
--- * Handler functions
 
 makeConnection :: ConId   -- ^ Identifier to use
                -> String  -- ^ Server
@@ -54,8 +61,29 @@ makeConnection conId server port listen = do
 getCon :: ConId -> Handler (Maybe Con)
 getCon conId = liftM (Map.lookup conId) getConnections 
 
+readLine :: ConId -> Handler (Maybe Text)
+readLine conId = getCon conId >>= \x -> case x of
+    Nothing  -> return Nothing
+    Just con -> fmap Just $ readLine' con
 
--- * Helpers
+readLine' :: Con -> Handler Text
+readLine' = liftIO . T.hGetLine . conSocket
+
+-- | Write a raw text to a Con.
+writeLine :: Text -> ConId -> Handler ()
+writeLine t conId = getCon conId >>= \x -> case x of
+    Nothing  -> return ()
+    Just con -> writeLine' t con
+
+writeCmd :: Command -> ConId -> Handler ()
+writeCmd = writeLine . showCommand
+
+-- | Write a raw text to a Con.
+writeLine' :: Text -> Con -> Handler ()
+writeLine' t con = liftIO $ T.hPutStrLn (conSocket con) t
+
+writeCmd' :: Command -> Con -> Handler ()
+writeCmd' = writeLine' . showCommand
 
 insertCon :: ConId -> Con -> Handler ()
 insertCon conId con = onConnections (\cs -> (Map.insert conId con cs, ()))

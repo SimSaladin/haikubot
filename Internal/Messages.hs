@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Messages.hs
 -- Creation Date: Dec 30 2012 [02:49:56]
--- Last Modified: Dec 30 2012 [04:27:53]
+-- Last Modified: Dec 31 2012 [03:04:12]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 -- 
 -- |
@@ -41,6 +41,7 @@ data Command =
   | MNick    Text                   -- ^ NICK newnick
   | MNotice  Text Text              -- ^ NOTICE usr/#chan :msg
   | MAction  Text Text              -- ^ PRIVMSG usr/#chan :ACTION msg
+  | MUser    Text Text Text         -- ^ USER user mode :real
   deriving (Eq, Read, Show)
 
 data IrcMessage = IrcMessage
@@ -167,8 +168,9 @@ showCommand (MMode    chan mode Nothing)    = "MODE "    `T.append` chan `T.appe
 showCommand (MTopic   chan (Just msg))      = "TOPIC "   `T.append` chan `T.append` " :" `T.append` msg
 showCommand (MTopic   chan Nothing)         = "TOPIC "   `T.append` chan
 showCommand (MInvite  usr chan)             = "INVITE "  `T.append` usr  `T.append` " "  `T.append` chan
-showCommand (MKick    chan usr msg)         = "KICK "    `T.append` chan `T.append` " "  `T.append` usr `T.append` " :" `T.append` msg
+showCommand (MKick    chan usr msg)         = "KICK "    `T.append` chan `T.append` " "  `T.append` usr  `T.append` " :" `T.append` msg
 showCommand (MQuit    msg)                  = "QUIT :"   `T.append` msg
 showCommand (MNick    nick)                 = "NICK "    `T.append` nick
 showCommand (MNotice  chan msg)             = "NOTICE "  `T.append` chan `T.append` " :" `T.append` msg
-showCommand (MAction  chan msg)             = showCommand $ MPrivmsg chan ("\x01ACTION " `T.append` msg `T.append` "\x01")
+showCommand (MAction  chan msg)             = showCommand $ MPrivmsg chan ("\x01ACTION " `T.append` msg  `T.append` "\x01")
+showCommand (MUser    user mode real)       = "USER "    `T.append` user `T.append` " "  `T.append` mode `T.append` " * " `T.append` " :" `T.append` real

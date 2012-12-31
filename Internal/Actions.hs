@@ -2,58 +2,95 @@
 ------------------------------------------------------------------------------
 -- File:          Internal/Actions.hs
 -- Creation Date: Dec 29 2012 [23:59:51]
--- Last Modified: Dec 30 2012 [06:21:57]
+-- Last Modified: Dec 31 2012 [07:18:48]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | General actions.
 module Internal.Actions
-  ( readLine
-  , writeLine
-  , writeCmd
-  , getPlugin
+  ( getPlugin
   , onPlugins
+  , writeCommand
+  , writeRaw
+  , mget
+  , aget
+  , privmsg
+  , maybeOrigin
+  , requireOrigin
+  , reply
+  , (===)
+  , endIf
+  , ensure
   ) where
 
+import Data.Monoid (mappend)
 import Control.Monad
 import Data.Text (Text)
 import Data.Maybe (catMaybes)
-import Control.Concurrent.STM
 import qualified Data.Map as Map
-import qualified Data.Text.IO as T
-import System.IO (Handle)
 
 import Internal.Types
 import Internal.Connections
 import Internal.Messages
-
-getHandle :: ConId -> Action a Handle
-getHandle = liftM conSocket . lift . getCon
+import Logging
 
 
--- * Con
+-- * Con on Action
 
-readLine :: ConId -> Action a Text
-readLine conId = getHandle conId >>= liftIO . T.hGetLine
+writeCommand :: Command -> Action p ()
+writeCommand cmd = getActionCon >>= lift . liftM Just . writeCmd' cmd
 
--- | Write a raw text to a Con.
-writeLine :: Text -> ConId -> Action a ()
-writeLine t conId = getHandle conId >>= liftIO . flip T.hPutStrLn t
-
-writeCmd :: Command -> ConId -> Action a ()
-writeCmd cmd conId = writeLine (showCommand cmd) conId
+writeRaw :: Text -> Action p ()
+writeRaw text = getActionCon >>= lift . liftM Just . writeLine' text
 
 
 -- * Plugins
 
 getPlugin :: Text -> Handler (Maybe Plugin)
 getPlugin pId = do
-    ps <- liftM cPlugins getConfig
-    case Map.lookup pId ps of
-      Nothing -> return Nothing
-      Just tvar -> liftM Just $ liftIO $ readTVarIO tvar
+    liftM (Map.lookup pId . cPlugins) getConfig
 
-onPlugins :: Maybe IrcMessage -> (forall p. HaikuPlugin p => Action p r) -> Handler [r]
-onPlugins mmsg f = liftM (Map.elems . cPlugins) getConfig
-    >>= liftM catMaybes . mapM (\tvar -> liftIO (readTVarIO tvar) >>= f')
+onPlugins :: Maybe IrcMessage -> Maybe Con -> (forall p. HaikuPlugin p => Action p r) -> Handler [r]
+onPlugins mmsg mcon f = liftM (Map.elems . cPlugins) getConfig
+    >>= liftM catMaybes . mapM f'
   where
-    f' (MkPlugin persist) = runAction f persist mmsg
+    f' (MkPlugin persist) = runAction f $ ActionData persist mcon mmsg
+
+
+-- * Action helpers
+
+aget :: (p -> a) -> Action p a
+aget f = liftM f getActionData
+
+mget :: (IrcMessage -> a) -> Action p a
+mget f = liftM f getActionMessage
+
+privmsg :: Text -> Text -> Action p ()
+privmsg a b = writeCommand $ MPrivmsg a b
+
+maybeOrigin :: Action p (Maybe Text)
+maybeOrigin = liftM (join . fmap mOrigin) getActionMessage'
+
+requireOrigin :: Action p Text
+requireOrigin = maybeOrigin >>= \x -> case x of
+    Nothing -> fail "No origin"
+    Just x' -> return x'
+
+reply :: Text -> Action p ()
+reply msg = maybeOrigin >>= \x -> case x of
+    Nothing     -> lift $ liftM Just $ logOut msg
+    Just origin -> do
+        privmsg origin msg
+        lift $ liftM Just $ logInfo $ "<reply> " `mappend` msg
+
+(===) :: Eq a => (IrcMessage -> a) -> a -> Action p (Maybe Bool)
+f === t = liftM (fmap ((==) t . f)) getActionMessage'
+
+endIf :: Action p (Maybe Bool) -> Action p ()
+endIf a = a >>= \x -> case x of
+    Just True -> end
+    _         -> return ()
+
+ensure :: Action p (Maybe Bool) -> Action p ()
+ensure a = a >>= \x -> case x of
+    Just True -> return ()
+    _         -> end
