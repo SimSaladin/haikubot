@@ -2,13 +2,16 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot/Actions.hs
 -- Creation Date: Dec 29 2012 [23:59:51]
--- Last Modified: Dec 31 2012 [09:03:29]
+-- Last Modified: Dec 31 2012 [14:35:12]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | General actions.
 module Haikubot.Actions
-  ( getPlugin
+  ( -- * Plugins
+    getPlugin
   , onPlugins
+
+  -- * Actions
   , writeCommand
   , writeRaw
   , mget
@@ -34,16 +37,12 @@ import Haikubot.Messages
 import Haikubot.Logging
 
 
--- * Con on Action
-
 writeCommand :: Command -> Action p ()
 writeCommand cmd = getActionCon >>= lift . liftM Just . writeCmd' cmd
 
 writeRaw :: Text -> Action p ()
 writeRaw text = getActionCon >>= lift . liftM Just . writeLine' text
 
-
--- * Plugins
 
 getPlugin :: Text -> Handler (Maybe Plugin)
 getPlugin pId = do
@@ -55,8 +54,6 @@ onPlugins mmsg mcon f = liftM (Map.elems . cPlugins) getConfig
   where
     f' (MkPlugin persist) = runAction f $ ActionData persist mcon mmsg
 
-
--- * Action helpers
 
 aget :: (p -> a) -> Action p a
 aget f = liftM f getActionData

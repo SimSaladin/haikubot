@@ -1,12 +1,13 @@
 ------------------------------------------------------------------------------
 -- File: Config.hs
 -- Creation Date: Aug 05 2012 [06:14:42]
--- Last Modified: Dec 31 2012 [10:08:43]
+-- Last Modified: Dec 31 2012 [14:33:26]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Main 
   ( mainWithCLI
   , defaultConfig
+  -- * Re-exports
   , Basics(..)
   ) where
 

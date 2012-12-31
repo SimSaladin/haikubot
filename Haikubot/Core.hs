@@ -2,39 +2,47 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot.hs
 -- Creation Date: Dec 29 2012 [20:19:14]
--- Last Modified: Dec 31 2012 [08:50:27]
+-- Last Modified: Dec 31 2012 [14:32:17]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Core
-  ( Config(..)
+  ( -- * Data Types
+    Config(..)
+  , BotData(..)
+  , ActionData(..)
+
+  -- ** Connection types
+  , Con(..)
+  , ConId
+  , Connections
+
+  -- ** Plugin types
+  , HaikuPlugin(..)
+  , Plugin(..)
+  , Plugins
   , Res(..)
+
+  -- * The Monads
   , Handler
+  , Action
   , runHandler
   , runHandler'
-  , BotData(..)
-  , getBotData
-  , getConfig
-  
-  -- * Action
-  , ActionData(..)
-  , Action
   , runAction
   , runAction'
-  , ConId
-  , Con(..)
-  , Connections
+
+  -- * Helpers
+  -- ** Handler helpers
+  , getBotData
+  , getConfig
+
+  -- ** Action helpers
+  , lift
   , end
   , getActionData
   , getActionCon
   , getActionMessage
   , getActionCon'
   , getActionMessage'
-
-  , HaikuPlugin(..)
-  , Plugin(..)
-  , Plugins
-  , lift
-  , liftIO
   ) where
 
 import           Data.Text              (Text)
@@ -49,8 +57,6 @@ import           Network                (PortID)
 import           System.IO              (Handle)
 import           Haikubot.Messages
 
--- * Handler
-
 data Config = Config
   { cRootPrefix :: Text
   , cPlugins    :: Plugins
@@ -61,9 +67,56 @@ data BotData = BotData
   , botConnections :: TVar Connections
   }
 
+data ActionData p = ActionData 
+    { actionPersist :: p
+    , actionCon     :: Maybe Con
+    , actionMessage :: Maybe IrcMessage
+    }
+
+
+type ConId = Text
+
+data Con = Con
+  { conSocket :: Handle
+  , conServer :: String
+  , conPort   :: PortID
+  , conNick   :: Text
+  }
+
+type Connections = Map.Map ConId Con
+
+data Res = RSucc [Text]
+         | Rfail Text
+
+
+-- | Plugin interface.
+class HaikuPlugin p where
+
+  -- | Handle a root command either from command line or from authorized user.
+  handleCmd :: (Text, [Text]) -> Action p ()
+  handleCmd _ = fail "No action"
+
+  -- | Handle a privmsg.
+  handlePrivmsg :: Action p ()
+  handlePrivmsg = fail "No action"
+
+  -- | Action to run before haikubot exit.
+  onExit :: Action p ()
+  onExit = return ()
+
+data Plugin = forall a. HaikuPlugin a => MkPlugin a
+
+type Plugins = Map.Map Text (Plugin)
+
+
 -- | Handler monad.
 newtype Handler a = Handler { runH :: ReaderT BotData IO a }
   deriving (Functor, Monad, MonadIO, MonadReader BotData)
+
+-- | The action monad is provided to simplify plugin writing. It's a MaybeT over
+-- a ReaderT.
+newtype Action p a = Action { runA :: MaybeT (ReaderT (ActionData p) Handler) a }
+  deriving (Monad, MonadIO, MonadPlus, MonadReader (ActionData p))
 
 -- | Run a handler with empty connections.
 runHandler :: Handler a -> Config -> IO a
@@ -75,39 +128,19 @@ runHandler handler conf = do
 runHandler' :: Handler a -> BotData -> IO a
 runHandler' handler bdata = runReaderT (runH handler) bdata
 
-getBotData :: Handler BotData
-getBotData = ask
-
-getConfig :: Handler Config
-getConfig = liftM botConfig ask >>= liftIO . readTVarIO
-
-
--- * Action
-
-data ActionData p = ActionData 
-    { actionPersist :: p
-    , actionCon     :: Maybe Con
-    , actionMessage :: Maybe IrcMessage
-    }
-
--- | The action monad is provided to simplify plugin writing. It's a MaybeT over
--- a ReaderT.
-newtype Action p a = Action { runA :: MaybeT (ReaderT (ActionData p) Handler) a }
-  deriving (Monad, MonadIO, MonadPlus, MonadReader (ActionData p))
-
-end :: Action p ()
-end = fail "No operation."
-
--- | TODO: somehow use MonadTrans or something?
-lift :: Handler (Maybe a) -> Action p a
-lift handler = Action (MaybeT $ ReaderT (\_ -> handler))
-
 runAction :: Action p a -> ActionData p -> Handler (Maybe a)
 runAction action adata = runReaderT (runMaybeT (runA action)) adata
 
 -- | Run an action with "empty" ActionData
 runAction' :: Action () a -> Handler (Maybe a)
 runAction' action = runAction action $ ActionData () Nothing Nothing
+
+
+getBotData :: Handler BotData
+getBotData = ask
+
+getConfig :: Handler Config
+getConfig = liftM botConfig ask >>= liftIO . readTVarIO
 
 getActionData :: Action p p
 getActionData = liftM actionPersist ask
@@ -128,41 +161,10 @@ getActionMessage = getActionMessage' >>= \x -> case x of
     Nothing  -> fail "No message."
     Just msg -> return msg
 
+-- | TODO: somehow use MonadTrans or something?
+lift :: Handler (Maybe a) -> Action p a
+lift handler = Action (MaybeT $ ReaderT (\_ -> handler))
 
--- * Connections
+end :: Action p ()
+end = fail "No operation."
 
-type ConId = Text
-
-data Con = Con
-  { conSocket :: Handle
-  , conServer :: String
-  , conPort   :: PortID
-  , conNick   :: Text
-  }
-
-type Connections = Map.Map ConId Con
-
-
--- * Plugin
-
-data Res = RSucc [Text]
-         | Rfail Text
-
--- | Plugin interface.
-class HaikuPlugin p where
-
-  -- | Handle a root command either from command line or from authorized user.
-  handleCmd :: (Text, [Text]) -> Action p ()
-  handleCmd _ = fail "No action"
-
-  -- | Handle a privmsg.
-  handlePrivmsg :: Action p ()
-  handlePrivmsg = fail "No action"
-
-  -- | Action to run before haikubot exit.
-  onExit :: Action p ()
-  onExit = return ()
-
-data Plugin = forall a. HaikuPlugin a => MkPlugin a
-
-type Plugins = Map.Map Text (Plugin)
