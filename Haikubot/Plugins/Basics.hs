@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot/Basics.hs
 -- Creation Date: Dec 31 2012 [09:16:40]
--- Last Modified: Dec 31 2012 [09:51:07]
+-- Last Modified: Jan 05 2013 [15:33:56]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | Basic commands and actions.
@@ -61,3 +61,4 @@ greet :: Con
 greet con nick user real = do
     writeCmd' (MNick nick) con
     writeCmd' (MUser user "0" real) con
+

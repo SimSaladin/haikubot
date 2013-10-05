@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot.hs
 -- Creation Date: Dec 29 2012 [20:19:14]
--- Last Modified: Dec 31 2012 [14:32:17]
+-- Last Modified: Apr 11 2013 [22:29:49]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Core
@@ -37,6 +37,7 @@ module Haikubot.Core
 
   -- ** Action helpers
   , lift
+  , liftIO
   , end
   , getActionData
   , getActionCon
@@ -57,25 +58,26 @@ import           Network                (PortID)
 import           System.IO              (Handle)
 import           Haikubot.Messages
 
+-- | Settings for Haikubot.
 data Config = Config
-  { cRootPrefix :: Text
-  , cPlugins    :: Plugins
+  { cRootPrefix :: Text    -- ^ Prefix to use for root (admin) commands.
+  , cPlugins    :: Plugins -- ^ Plugins to use.
   }
 
+-- | Internal data shared by threads.
 data BotData = BotData
   { botConfig      :: TVar Config
   , botConnections :: TVar Connections
   }
 
+-- | Additional data available n plugins' functions.
 data ActionData p = ActionData 
     { actionPersist :: p
     , actionCon     :: Maybe Con
     , actionMessage :: Maybe IrcMessage
     }
 
-
-type ConId = Text
-
+-- | A connection to a server.
 data Con = Con
   { conSocket :: Handle
   , conServer :: String
@@ -83,8 +85,13 @@ data Con = Con
   , conNick   :: Text
   }
 
+-- | Connections are identified by ConIds (Texts).
+type ConId = Text
+
+-- | Connections used by the bot.
 type Connections = Map.Map ConId Con
 
+-- | 
 data Res = RSucc [Text]
          | Rfail Text
 

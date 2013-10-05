@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Plugins/Runot.hs
 -- Creation Date: Dec 29 2012 [19:38:44]
--- Last Modified: Dec 31 2012 [09:27:44]
+-- Last Modified: Apr 11 2013 [22:32:00]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Plugins.Runot (Runot(..)) where
@@ -32,13 +32,11 @@ instance HaikuPlugin Runot where
   handleCmd (_,_) = return ()
 
 handleHaiku :: Text -> [[[String]]] -> Action Runot ()
-handleHaiku haiku tavut = do
-    file <- aget rHaikuFile
-    let rytmi   = rytmit tavut
-        pptavut = foldl1 (\x y -> x ++ ('-':y)) (map show rytmi)
-    if isHaiku rytmi
-      then liftIO $ saveHaiku file haiku
-      else reply $ T.pack $ "onko näin? " ++ pptavut ++ ": " ++ printTavut tavut
+handleHaiku haiku tavut = if isHaiku rytmi
+    then liftIO . flip saveHaiku haiku =<< aget rHaikuFile
+    else reply $ T.pack $ "onko näin? " ++ pptavut ++ ": " ++ printTavut tavut
+    where rytmi   = rytmit tavut
+          pptavut = foldl1 (\x y -> x ++ ('-':y)) (map show rytmi)
 
 saveHaiku :: FilePath -> Text -> IO ()
 saveHaiku file haiku = do
