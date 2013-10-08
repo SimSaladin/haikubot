@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Plugins/Runot.hs
 -- Creation Date: Dec 29 2012 [19:38:44]
--- Last Modified: Oct 08 2013 [21:15:50]
+-- Last Modified: Oct 09 2013 [00:11:17]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Plugins.Runot (Runot(..)) where
@@ -9,21 +9,27 @@ module Haikubot.Plugins.Runot (Runot(..)) where
 import           Haikubot
 import           Tavutus (tavutaRuno, printTavut)
 
+import           Data.Time
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Control.Concurrent.STM
-import           Control.Arrow
-import           Data.Monoid
 import           Data.Maybe
 import qualified Data.Text        as T
 import           System.Directory (doesFileExist)
 import           System.Random    (randomIO)
+import           System.Locale
 
 if' :: Bool -> a -> a -> a
 if' ehto sitten muuten = if ehto then sitten else muuten
 
-type Haiku = (Text, Either Text Monogatari)
-type Monogatari = (Text, [Text])
+type UserId = Text
+
+data Haiku = Haiku UserId UTCTime Text
+             deriving (Show, Read)
+
+type Monogatari = (Text, Text, [Haiku]) -- ^ Origin, Title , haikus
+
+type Runo = Either Haiku Monogatari
 
 data Runot = Runot
   { rChannels   :: [Text]       -- ^ Channels where only haikus are permitted
@@ -34,7 +40,8 @@ data Runot = Runot
 
 instance HaikuPlugin Runot where
     handleCmd ("haiku?", _)           = aget rHaikuFile
-                                        >>= liftIO . getRandomHaiku >>= reply . format >> stop
+                                        >>= liftIO . (getRandomHaiku >=> format)
+                                        >>= mapM_ reply >> stop
     handleCmd ("haiku", xs)           = doHaiku (T.unwords xs)
     handleCmd ("monogatari", ["end"]) = endMonogatari                  >> stop
     handleCmd ("monogatari", xs)      = startMonogatari (T.unwords xs) >> stop
@@ -48,35 +55,49 @@ instance HaikuPlugin Runot where
                doHaiku msg
     handleIrcMessage _ = noop
 
+    onExit = endMonogataries
+
 doHaiku :: Text -> Action Runot Res
 doHaiku msg = case tavutaRuno (T.unpack msg) of
     Left  err   -> reply $ "Osaatko kirjoittaa? "
                         <> (T.pack . unwords . lines $ show err)
-    Right tavut -> handleHaiku msg tavut >> stop
+    Right tavut -> do
+        whoami  <- liftM (fromMaybe "(no-one)") maybeOrigin
+        time    <- liftIO getCurrentTime
+        let haiku = Haiku whoami time msg
+            in handleHaiku haiku tavut
+        stop
 
-saveHaiku :: Haiku -> Action Runot ()
+saveHaiku :: Runo -> Action Runot ()
+saveHaiku (Right (_, title, [])) = void . reply $ "Monogatari "
+            <> title
+            <> " suljettiin, mutta siihen ei kuulu yhtään haikua, joten sitä huomioitu."
 saveHaiku x = do
     haikuFile <- aget rHaikuFile
-    liftIO $ do
-        exists <- doesFileExist haikuFile
-        (if' exists appendFile writeFile) haikuFile (show x ++ "\n")
+    liftIO $ do exists <- doesFileExist haikuFile
+                (if' exists appendFile writeFile) haikuFile (show x ++ "\n")
+    case x of
+        (Right (_, title, xs)) -> void $ reply $ "Uusi monogatari: " <> title <>
+                                                 " (" <> (T.pack $ show $ length xs) <> " haikua)."
+        _ -> return ()
+    
 
-handleHaiku :: Text -> [[[String]]] -> Action Runot ()
+handleHaiku :: Haiku -> [[[String]]] -> Action Runot ()
 handleHaiku haiku tavut = if isHaiku rytmi
     then do
         whoami  <- liftM (fromMaybe "(no-one)") maybeOrigin
         ref     <- aget rHaikuMonogataries
         users   <- liftIO . atomically $ takeTMVar ref
         case Map.lookup whoami users of
-            Nothing -> saveHaiku (whoami, Left haiku)
-            Just x  -> liftIO . atomically . putTMVar ref 
-                        $ Map.insert whoami ((++ [haiku]) `second` x) users
+            Nothing         -> saveHaiku (Left haiku)
+            Just (a,b,xs)   -> liftIO . atomically . putTMVar ref 
+                        $ Map.insert whoami (a, b, xs ++ [haiku]) users
     else void . reply . T.pack $ "onko näin? " ++ pptavut ++ ": " ++ printTavut tavut
   where
       rytmi   = rytmit tavut
       pptavut = foldl1 (\x y -> x ++ ('-':y)) (map show rytmi)
 
-getRandomHaiku :: FilePath -> IO (Either Text Haiku)
+getRandomHaiku :: FilePath -> IO (Either Text Runo)
 getRandomHaiku fp = do
   exists <- doesFileExist fp
   guard exists
@@ -88,17 +109,25 @@ getRandomHaiku fp = do
          else return $ Left "i haz no haikuz!"
     else return $ Left "i haz no haikufilez!!"
 
-format :: Either Text Haiku -> Text
-format (Left err)          = "(An error occurred: " <> err <> ", contact administrator)"
-format (Right (my, haiku)) = f haiku <> " -- " <> my
-    where f (Left x)        = x
-          f (Right (t, xs)) = t <> ": " <> T.intercalate "\n" (map ("  " <>) xs)
+format :: Either Text Runo -> IO [Text]
+format (Left err)           = return [ "Error: " <> err <> ". This shouldn't happen." ]
+format (Right (Left haiku)) = formatHaiku haiku >>= \x -> return [x]
+format (Right (Right (origin, title, haikut))) = do
+    liftM ( ("Monogatari: "<>title<>" ("<>origin<>")") :)
+        $ mapM (liftM ("  " <>) . formatHaiku) haikut
+
+formatHaiku :: Haiku -> IO Text
+formatHaiku (Haiku by time haiku) = liftM (\t -> haiku <> "  -- " <> by <> ", " <> t) $ formatTime' time
+
+formatTime' :: UTCTime -> IO Text
+formatTime' time = liftM (T.pack . formatTime defaultTimeLocale "%k:%M (%d.%m-%y)" . flip utcToZonedTime time) getCurrentTimeZone
 
 isHaiku :: [Int] -> Bool
 isHaiku = (==) [5,7,5]
 
 rytmit :: [[[String]]] -> [Int]
 rytmit = map (sum . map length)
+
 
 -- * Monogataries
 
@@ -112,17 +141,26 @@ endMonogatari = do
       Nothing         -> void . reply $ "Ei monogataria sinulle"
       Just monogatari -> do
           liftIO . atomically $ putTMVar ref $ Map.delete whoami users
-          saveHaiku (whoami, Right monogatari)
+          saveHaiku (Right monogatari)
+
+-- | End and save all monogataries
+endMonogataries :: Action Runot ()
+endMonogataries = do
+    ref <- aget rHaikuMonogataries
+    (liftIO . atomically . takeTMVar) ref >>= sequence_ . Map.elems . Map.mapWithKey f
+    (liftIO . atomically . putTMVar ref) Map.empty
+  where
+      f user monog = saveHaiku (Right monog)
 
 startMonogatari :: Text -> Action Runot ()
 startMonogatari title = do
-    ref <- aget rHaikuMonogataries
+    ref    <- aget rHaikuMonogataries
     whoami <- requireOrigin
 
     liftIO . atomically $ do
       users <- takeTMVar ref
-      let f Nothing        = (title, [])
-          f (Just (_, xs)) = (title, xs) -- rename monogatari
+      let f Nothing                = (whoami, title, [])
+          f (Just (origin, _, xs)) = (origin, title, xs) -- rename monogatari
           in putTMVar ref $ Map.alter (Just . f) whoami users
 
     liftIO $ atomically (readTMVar ref) >>= print . show

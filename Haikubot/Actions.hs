@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot/Actions.hs
 -- Creation Date: Dec 29 2012 [23:59:51]
--- Last Modified: Oct 08 2013 [20:58:02]
+-- Last Modified: Oct 08 2013 [22:40:07]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | General actions.
@@ -13,7 +13,7 @@ module Haikubot.Actions
 
   -- * Actions
   -- ** send
-  , writeCommand
+  , writeCommand, writeCommandTo
   , writeRaw
   , reply
 
@@ -35,7 +35,7 @@ module Haikubot.Actions
 
 import Data.Monoid ( (<>) )
 import Control.Monad
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import qualified Data.Map as Map
 
 import Haikubot.Core
@@ -45,9 +45,18 @@ import Haikubot.Logging
 
 -- * Send
 
--- | Write a IRC command to con. Res: stop.
+-- | Write a IRC command to current con. Res: stop.
 writeCommand :: Command -> Action p Res
-writeCommand cmd = getActionCon >>= liftHandler . writeCmd' cmd >> stop
+writeCommand cmd = getActionCon >>= writeCommandTo' cmd
+
+writeCommandTo :: Command -> ConId -> Action p Res
+writeCommandTo cmd conId = liftHandler (getCon conId)
+    >>= maybe (fail "ConID not found!" >> stop)
+              (writeCommandTo' cmd)
+
+writeCommandTo' :: Command -> Con -> Action p Res
+{-# INLINE writeCommandTo' #-}
+writeCommandTo' cmd con = liftHandler (writeCmd' cmd con) >> stop
 
 -- | Write a raw line to con. Res: stop.
 writeRaw :: Text -> Action p Res
@@ -59,13 +68,11 @@ privmsg a b = writeCommand (MPrivmsg a b)
 
 -- | Reply text to origin. Res: stop.
 reply :: Text -> Action p Res
-reply msg = do
-    morigin <- maybeOrigin
-    case morigin of
-        Nothing     -> liftHandler $ logOut msg
-        Just origin -> do privmsg origin msg
-                          liftHandler . logInfo $ "<reply> " <> msg
-    stop
+reply msg = maybeOrigin >>=
+    maybe (fail $ unpack $ "No origin to reply to! ("<>msg<>")") go
+    >> stop
+  where go origin = do void $ privmsg origin msg
+                       liftHandler . logInfo $ "<reply> " <> msg
 
 -- * Get
 

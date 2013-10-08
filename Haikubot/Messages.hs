@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Messages.hs
 -- Creation Date: Dec 30 2012 [02:49:56]
--- Last Modified: Oct 08 2013 [20:05:16]
+-- Last Modified: Oct 08 2013 [22:09:50]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 -- 
 -- |
@@ -24,6 +24,7 @@ module Haikubot.Messages
   , showCommand
   ) where
 
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Arrow hiding (first)
@@ -161,18 +162,18 @@ dropColon xs =
     else xs
 
 showCommand :: Command -> Text
-showCommand (MPrivmsg chan msg)             = "PRIVMSG " `T.append` chan `T.append` " :" `T.append` msg
-showCommand (MJoin    chan (Just key))      = "JOIN "    `T.append` chan `T.append` " "  `T.append` key
-showCommand (MJoin    chan Nothing)         = "JOIN "    `T.append` chan
-showCommand (MPart    chan msg)             = "PART "    `T.append` chan `T.append` " :" `T.append` msg
-showCommand (MMode    chan mode (Just usr)) = "MODE "    `T.append` chan `T.append` " "  `T.append` mode `T.append` " " `T.append` usr
-showCommand (MMode    chan mode Nothing)    = "MODE "    `T.append` chan `T.append` " "  `T.append` mode
-showCommand (MTopic   chan (Just msg))      = "TOPIC "   `T.append` chan `T.append` " :" `T.append` msg
-showCommand (MTopic   chan Nothing)         = "TOPIC "   `T.append` chan
-showCommand (MInvite  usr chan)             = "INVITE "  `T.append` usr  `T.append` " "  `T.append` chan
-showCommand (MKick    chan usr msg)         = "KICK "    `T.append` chan `T.append` " "  `T.append` usr  `T.append` " :" `T.append` msg
-showCommand (MQuit    msg)                  = "QUIT :"   `T.append` msg
-showCommand (MNick    nick)                 = "NICK "    `T.append` nick
-showCommand (MNotice  chan msg)             = "NOTICE "  `T.append` chan `T.append` " :" `T.append` msg
-showCommand (MAction  chan msg)             = showCommand $ MPrivmsg chan ("\x01ACTION " `T.append` msg  `T.append` "\x01")
-showCommand (MUser    user mode real)       = "USER "    `T.append` user `T.append` " "  `T.append` mode `T.append` " * " `T.append` " :" `T.append` real
+showCommand (MPrivmsg chan msg)             = "PRIVMSG " <> chan <> " :" <> msg
+showCommand (MJoin    chan (Just key))      = "JOIN "    <> chan <> " "  <> key
+showCommand (MJoin    chan Nothing)         = "JOIN "    <> chan
+showCommand (MPart    chan msg)             = "PART "    <> chan <> " :" <> msg
+showCommand (MMode    chan mode (Just usr)) = "MODE "    <> chan <> " "  <> mode <> " " <> usr
+showCommand (MMode    chan mode Nothing)    = "MODE "    <> chan <> " "  <> mode
+showCommand (MTopic   chan (Just msg))      = "TOPIC "   <> chan <> " :" <> msg
+showCommand (MTopic   chan Nothing)         = "TOPIC "   <> chan
+showCommand (MInvite  usr chan)             = "INVITE "  <> usr  <> " "  <> chan
+showCommand (MKick    chan usr msg)         = "KICK "    <> chan <> " "  <> usr  <> " :" <> msg
+showCommand (MQuit    msg)                  = "QUIT :"   <> msg
+showCommand (MNick    nick)                 = "NICK "    <> nick
+showCommand (MNotice  chan msg)             = "NOTICE "  <> chan <> " :" <> msg
+showCommand (MAction  chan msg)             = showCommand $ MPrivmsg chan ("\x01ACTION " <> msg  <> "\x01")
+showCommand (MUser    user mode real)       = "USER "    <> user <> " "  <> mode <> " * " <> " :" <> real

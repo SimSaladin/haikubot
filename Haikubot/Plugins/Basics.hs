@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot/Basics.hs
 -- Creation Date: Dec 31 2012 [09:16:40]
--- Last Modified: Oct 08 2013 [21:08:56]
+-- Last Modified: Oct 08 2013 [22:35:24]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | Basic commands and actions.
@@ -9,7 +9,6 @@ module Haikubot.Plugins.Basics (Basics(..)) where
 
 import           Haikubot
 import           Haikubot.Commands
-import           Data.Monoid
 import qualified Data.Text as T
 import           Network (PortID(PortNumber))
 
@@ -17,8 +16,11 @@ data Basics = Basics
 
 instance HaikuPlugin Basics where
     handleCmd ("echo"   , xs         ) = reply $ T.intercalate " " xs
-    handleCmd ("join"   , [chan]     ) = writeCommand $ MJoin chan Nothing
-    handleCmd ("join"   , [chan, key]) = writeCommand $ MJoin chan (Just key)
+
+    handleCmd ("join"   , [chan]       ) = writeCommand $ MJoin chan Nothing
+    handleCmd ("join"   , [chan, conId]) = writeCommandTo (MJoin chan Nothing) conId
+    handleCmd ("join"   , _            ) = reply "syntax: join <channel> [<conId>]"
+
     handleCmd ("rawirc" , xs         ) = writeRaw $ T.intercalate " " xs
     handleCmd ("quit"   , _          ) = liftHandler exit >> stop
     handleCmd ("connect", conId:server:port:nick:user:real) = do
@@ -49,9 +51,9 @@ instance HaikuPlugin Basics where
 listener :: Con -> Handler ()
 listener con = forever $ do
     line <- readLine' con
-    logInfo line
-    runMsg con (parse line)
-    return ()
+    let cmd = parse line
+    unless (mCode cmd == "PING") $ logInfo line
+    runMsg con cmd
 
 greet :: Con
       -> Text -- ^ nick

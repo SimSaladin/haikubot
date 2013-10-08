@@ -1,1 +1,1 @@
-connect irc.paivola.fi 6667 haikubot haikubot * Bot
+connect PVLnet irc.paivola.fi 6667 haikubot haikubot Bot

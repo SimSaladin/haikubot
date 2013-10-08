@@ -47,3 +47,6 @@ executable haikubot
                       , text
                       , transformers
                       , mtl
+                      , time
+                      , current-locale
+                      , old-locale
