@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot.hs
 -- Creation Date: Dec 29 2012 [20:19:14]
--- Last Modified: Oct 08 2013 [22:20:15]
+-- Last Modified: Oct 09 2013 [00:36:36]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Connections
@@ -29,9 +29,7 @@ import           Control.Exception      (bracket_)
 import           Control.Monad
 import           Text.Printf            (printf)
 import           Network                ( PortID, connectTo )
-import           System.IO              ( hSetBuffering, hFlush
-                                        , BufferMode(NoBuffering), stdout
-                                        )
+import           System.IO
 import           Haikubot.Core
 import           Haikubot.Messages
 import           Haikubot.Logging
@@ -42,7 +40,7 @@ insertCon :: ConId -> Con -> Handler ()
 insertCon conId con = onConnections (\cs -> (Map.insert conId con cs, ()))
 
 deleteCon :: ConId -> Con -> Handler ()
-deleteCon conId _ = do
+deleteCon conId _ =
   -- XXX: actions with con?
   onConnections (\cs -> (Map.delete conId cs, ()))
 
@@ -71,6 +69,7 @@ makeConnection conId server port listen = do
       else liftM Right $ liftIO $ do
           h <- notified $ connectTo server port
           hSetBuffering h NoBuffering
+          hSetEncoding h utf8
           let con = Con h server port ""
           forkIO $ (bracket_ <$> f . insertCon conId
                              <*> f . deleteCon conId
@@ -86,9 +85,8 @@ getCon conId = liftM (Map.lookup conId) getConnections
 -- * Read
 
 readLine :: ConId -> Handler (Maybe Text)
-readLine conId = getCon conId >>= \x -> case x of
-    Nothing  -> return Nothing
-    Just con -> fmap Just $ readLine' con
+readLine conId = getCon conId >>= maybe (return Nothing)
+                                        (liftM Just . readLine')
 
 readLine' :: Con -> Handler Text
 readLine' = liftIO . T.hGetLine . conSocket
