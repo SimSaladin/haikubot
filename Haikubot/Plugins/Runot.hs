@@ -1,10 +1,14 @@
 ------------------------------------------------------------------------------
 -- File:          Plugins/Runot.hs
 -- Creation Date: Dec 29 2012 [19:38:44]
--- Last Modified: Oct 09 2013 [00:28:18]
+-- Last Modified: Oct 09 2013 [02:27:42]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
-module Haikubot.Plugins.Runot (Runot(..)) where
+module Haikubot.Plugins.Runot
+    ( Runot(..)
+    , getRandomHaiku
+    , format
+    ) where
 
 import           Haikubot
 import           Tavutus (tavutaRuno, printTavut)
