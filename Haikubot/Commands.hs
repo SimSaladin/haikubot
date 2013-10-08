@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot/Commands.hs
 -- Creation Date: Dec 30 2012 [04:09:45]
--- Last Modified: Dec 31 2012 [09:41:33]
+-- Last Modified: Oct 06 2013 [13:35:09]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Commands
@@ -25,13 +25,11 @@ import Haikubot.Messages
 
 type Cmd = (Text, [Text])
 
+-- | Run handlers for an message
 runMsg :: Maybe Con -> Maybe IrcMessage -> Handler ()
-runMsg mcon mmsg = liftM mconcat $ onPlugins mmsg mcon handlePrivmsg
-
--- | TODO: support quoting.
-parseCmd :: Text -> Cmd
-parseCmd t = (T.takeWhile (' '/=) s, T.words $ T.strip $ T.dropWhile (/=' ') s)
-  where s = T.stripStart t
+runMsg mcon mmsg = 
+    onPlugins mmsg mcon handlePrivmsg
+    >> return ()
 
 -- | Execute the Cmd.
 runCmd' :: Text -> Handler ()
@@ -39,7 +37,14 @@ runCmd' = runCmd Nothing Nothing
 
 -- | Execute the Cmd coming from an irc message.
 runCmd :: Maybe IrcMessage -> Maybe Con -> Text -> Handler ()
-runCmd mmsg mcon cmdtext = liftM mconcat $ onPlugins mmsg mcon (handleCmd $ parseCmd cmdtext)
+runCmd mmsg mcon cmdtext =
+    onPlugins mmsg mcon (handleCmd $ parseCmd cmdtext)
+    >> return ()
+
+-- | TODO: support quoting.
+parseCmd :: Text -> Cmd
+parseCmd t = (T.takeWhile (' '/=) s, T.words $ T.strip $ T.dropWhile (/=' ') s)
+  where s = T.stripStart t
 
 -- | Read and execute commands from a file line by line.
 cmdsFromFile :: FilePath -> Handler ()

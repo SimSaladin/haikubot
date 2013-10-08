@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot/Basics.hs
 -- Creation Date: Dec 31 2012 [09:16:40]
--- Last Modified: Jan 05 2013 [15:33:56]
+-- Last Modified: Oct 05 2013 [23:26:27]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | Basic commands and actions.
@@ -9,6 +9,7 @@ module Haikubot.Plugins.Basics (Basics(..)) where
 
 import           Haikubot
 import           Haikubot.Commands
+import           Data.Monoid
 import qualified Data.Text as T
 import           Network (PortID(PortNumber))
 
@@ -24,7 +25,7 @@ instance HaikuPlugin Basics where
         res <- lift . liftM Just $ makeConnection conId (T.unpack server) port' exec
         case res of
             Left err -> lift . liftM Just $ logErr err
-            Right _  -> reply $ "Connection to " `mappend` conId `mappend` " established."
+            Right _  -> reply $ "Connection to " <> conId <> " established."
       where
         port' = PortNumber $ fromIntegral (read $ T.unpack port :: Integer)
         real' = T.intercalate " " real

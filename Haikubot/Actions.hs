@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot/Actions.hs
 -- Creation Date: Dec 29 2012 [23:59:51]
--- Last Modified: Dec 31 2012 [14:35:12]
+-- Last Modified: Oct 06 2013 [13:35:08]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | General actions.
@@ -12,14 +12,22 @@ module Haikubot.Actions
   , onPlugins
 
   -- * Actions
+  -- ** send
   , writeCommand
   , writeRaw
+  , reply
+
+  -- ** plugin state
   , mget
   , aget
+
   , privmsg
+
+  -- ** User identification
   , maybeOrigin
   , requireOrigin
-  , reply
+
+  -- ** 'checks'
   , (===)
   , endIf
   , ensure
@@ -48,11 +56,15 @@ getPlugin :: Text -> Handler (Maybe Plugin)
 getPlugin pId = do
     liftM (Map.lookup pId . cPlugins) getConfig
 
-onPlugins :: Maybe IrcMessage -> Maybe Con -> (forall p. HaikuPlugin p => Action p r) -> Handler [r]
+type PluginAction a = forall p. HaikuPlugin p => Action p a
+
+-- | Execute some action on all plugins
+onPlugins :: Maybe IrcMessage -> Maybe Con
+          -> PluginAction r -> Handler [Either String r]
 onPlugins mmsg mcon f = liftM (Map.elems . cPlugins) getConfig
-    >>= liftM catMaybes . mapM f'
+    >>= mapM f'
   where
-    f' (MkPlugin persist) = runAction f $ ActionData persist mcon mmsg
+    f' (MkPlugin persist) = runAction f (ActionData persist mcon mmsg)
 
 
 aget :: (p -> a) -> Action p a

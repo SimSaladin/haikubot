@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File: Config.hs
 -- Creation Date: Aug 05 2012 [06:14:42]
--- Last Modified: Dec 31 2012 [14:33:26]
+-- Last Modified: Oct 05 2013 [23:59:54]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Main 
@@ -13,11 +13,14 @@ module Haikubot.Main
 
 import Data.Map (fromList, empty)
 
+import Control.Concurrent.STM
 import Haikubot
 import Haikubot.Settings
 import Haikubot.CLI
 import Haikubot.Plugins.Runot
 import Haikubot.Plugins.Basics
+
+import System.IO.Unsafe
 
 -- | Main entry point.
 --
@@ -40,3 +43,4 @@ runot :: Runot
 runot = Runot ["#haiku", "#haiku-testing"]
               "/home/sim/docs/haikut.txt"
               empty
+              (unsafePerformIO $ newTMVarIO empty)

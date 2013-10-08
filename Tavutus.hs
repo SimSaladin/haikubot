@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Tavutus.hs
 -- Creation Date: Jul 06 2012
--- Last Modified: Jul 19 2012 [17:04:25]
+-- Last Modified: Oct 05 2013 [18:34:47]
 -- Created By :   Samuli Thomasson [SimSaladin] samuli.thomassonATgmail.com
 ------------------------------------------------------------------------------
 
@@ -29,6 +29,7 @@ module Tavutus where
 --
 
 import Text.ParserCombinators.Parsec
+import Data.Monoid
 import Data.List (delete)
 import Data.Char (toUpper)
 
@@ -59,10 +60,8 @@ vokDouble = foldl1 (<|>) $ map (try . string) $ concatMap
    (\x -> [x:[x], x:[toUpper x], (toUpper x):[x], (toUpper x):[toUpper x]])
    "aeiouyäö"
 
-tavutaRuno :: String -> Either String [[[String]]]
-tavutaRuno input = case parse parseRuno "" ((dropWhile (== ' ') input) ++ " ") of
-   Left err -> Left ("Osaatko edes kirjoittaa? ("++show err++")")
-   Right val -> Right $ delete [] val
+tavutaRuno :: String -> Either ParseError [[[String]]]
+tavutaRuno input = fmap (delete []) $ parse parseRuno "" ((dropWhile (== ' ') input) ++ " ")
 
 parseRuno :: Parser [[[String]]]
 parseRuno = sepEndBy parseTavutaSanat (many1 (many space >> many1 (char ';') >> many space))
