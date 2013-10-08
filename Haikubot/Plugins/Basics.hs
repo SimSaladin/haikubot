@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot/Basics.hs
 -- Creation Date: Dec 31 2012 [09:16:40]
--- Last Modified: Oct 05 2013 [23:26:27]
+-- Last Modified: Oct 08 2013 [21:08:56]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | Basic commands and actions.
@@ -20,11 +20,11 @@ instance HaikuPlugin Basics where
     handleCmd ("join"   , [chan]     ) = writeCommand $ MJoin chan Nothing
     handleCmd ("join"   , [chan, key]) = writeCommand $ MJoin chan (Just key)
     handleCmd ("rawirc" , xs         ) = writeRaw $ T.intercalate " " xs
-    handleCmd ("quit"   , _          ) = lift $ liftM Just exit
+    handleCmd ("quit"   , _          ) = liftHandler exit >> stop
     handleCmd ("connect", conId:server:port:nick:user:real) = do
-        res <- lift . liftM Just $ makeConnection conId (T.unpack server) port' exec
+        res <- liftHandler $ makeConnection conId (T.unpack server) port' exec
         case res of
-            Left err -> lift . liftM Just $ logErr err
+            Left err -> liftHandler (logErr err) >> stop
             Right _  -> reply $ "Connection to " <> conId <> " established."
       where
         port' = PortNumber $ fromIntegral (read $ T.unpack port :: Integer)
@@ -32,26 +32,25 @@ instance HaikuPlugin Basics where
         exec con = greet con nick user real' >> listener con
 
     handleCmd ("connect", _) = reply "Syntax: connect <identifier> <server> <port> <nick> <user> <realname>"
-    handleCmd (_        , _) = return ()
+    handleCmd (_        , _) = noop
 
-    handlePrivmsg = do
-        code <- mget mCode
-        case code of
-          "PING"    -> mget mMsg >>= writeRaw . T.append "PONG :"
-          "PRIVMSG" -> do
-              prefix <- lift $ liftM (Just . cRootPrefix) getConfig
-              msg    <- mget mMsg
-              guard $ prefix `T.isPrefixOf` msg
-              amsg <- getActionMessage'
-              acon <- getActionCon'
-              lift $ liftM Just $ runCmd amsg acon msg
-          _ -> return ()
+    handleIrcMessage msg
+        | mCode msg == "PING"    = writeRaw ("PONG :" <> mMsg msg) >> stop
+        | mCode msg == "PRIVMSG" = do
+            config <- liftHandler getConfig
+            maybe noop runConCmd (cRootPrefix config `T.stripPrefix` mMsg msg)
+        | otherwise = noop
+            where
+                runConCmd cmd = do
+                    con <- getActionCon'
+                    liftHandler $ runCmd con (Just msg) cmd
+                    stop
 
 listener :: Con -> Handler ()
 listener con = forever $ do
     line <- readLine' con
     logInfo line
-    runMsg (Just con) (Just $ parse line)
+    runMsg con (parse line)
     return ()
 
 greet :: Con

@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot/Actions.hs
 -- Creation Date: Dec 29 2012 [23:59:51]
--- Last Modified: Oct 06 2013 [13:35:08]
+-- Last Modified: Oct 08 2013 [20:58:02]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 -- | General actions.
@@ -29,14 +29,13 @@ module Haikubot.Actions
 
   -- ** 'checks'
   , (===)
-  , endIf
-  , ensure
+--  , endIf
+--  , ensure
   ) where
 
-import Data.Monoid (mappend)
+import Data.Monoid ( (<>) )
 import Control.Monad
 import Data.Text (Text)
-import Data.Maybe (catMaybes)
 import qualified Data.Map as Map
 
 import Haikubot.Core
@@ -44,37 +43,59 @@ import Haikubot.Connections
 import Haikubot.Messages
 import Haikubot.Logging
 
+-- * Send
 
-writeCommand :: Command -> Action p ()
-writeCommand cmd = getActionCon >>= lift . liftM Just . writeCmd' cmd
+-- | Write a IRC command to con. Res: stop.
+writeCommand :: Command -> Action p Res
+writeCommand cmd = getActionCon >>= liftHandler . writeCmd' cmd >> stop
 
-writeRaw :: Text -> Action p ()
-writeRaw text = getActionCon >>= lift . liftM Just . writeLine' text
+-- | Write a raw line to con. Res: stop.
+writeRaw :: Text -> Action p Res
+writeRaw text = getActionCon >>= liftHandler . writeLine' text >> stop
 
+-- | @privmsg channel msg@ Writes @msg@ to channel @channel@. Res: stop.
+privmsg :: Text -> Text -> Action p Res
+privmsg a b = writeCommand (MPrivmsg a b)
+
+-- | Reply text to origin. Res: stop.
+reply :: Text -> Action p Res
+reply msg = do
+    morigin <- maybeOrigin
+    case morigin of
+        Nothing     -> liftHandler $ logOut msg
+        Just origin -> do privmsg origin msg
+                          liftHandler . logInfo $ "<reply> " <> msg
+    stop
+
+-- * Get
 
 getPlugin :: Text -> Handler (Maybe Plugin)
-getPlugin pId = do
-    liftM (Map.lookup pId . cPlugins) getConfig
+getPlugin pId = liftM (Map.lookup pId . cPlugins) getConfig
 
-type PluginAction a = forall p. HaikuPlugin p => Action p a
-
--- | Execute some action on all plugins
-onPlugins :: Maybe IrcMessage -> Maybe Con
-          -> PluginAction r -> Handler [Either String r]
-onPlugins mmsg mcon f = liftM (Map.elems . cPlugins) getConfig
-    >>= mapM f'
+onPlugins :: Maybe Con
+          -> Maybe IrcMessage
+          -> PluginAction
+          -> Handler PluginResult
+onPlugins mcon mmsg act_f = do
+    (x:xs) <- liftM (Map.elems . cPlugins) getConfig
+    go x xs
   where
-    f' (MkPlugin persist) = runAction f (ActionData persist mcon mmsg)
+      go :: Plugin -> [Plugin] -> Handler (Either String Res)
+      go (MkPlugin d) []     = doAction d
+      go (MkPlugin d) (x:xs) = do
+          res <- doAction d
+          case res of
+            Left err      -> return (Left err)
+            Right Nothing -> go x xs
+            _             -> return res
 
+      doAction persist = runAction act_f (ActionData persist mcon mmsg)
 
 aget :: (p -> a) -> Action p a
 aget f = liftM f getActionData
 
 mget :: (IrcMessage -> a) -> Action p a
 mget f = liftM f getActionMessage
-
-privmsg :: Text -> Text -> Action p ()
-privmsg a b = writeCommand $ MPrivmsg a b
 
 maybeOrigin :: Action p (Maybe Text)
 maybeOrigin = liftM (join . fmap mOrigin) getActionMessage'
@@ -84,22 +105,5 @@ requireOrigin = maybeOrigin >>= \x -> case x of
     Nothing -> fail "No origin"
     Just x' -> return x'
 
-reply :: Text -> Action p ()
-reply msg = maybeOrigin >>= \x -> case x of
-    Nothing     -> lift $ liftM Just $ logOut msg
-    Just origin -> do
-        privmsg origin msg
-        lift $ liftM Just $ logInfo $ "<reply> " `mappend` msg
-
 (===) :: Eq a => (IrcMessage -> a) -> a -> Action p (Maybe Bool)
 f === t = liftM (fmap ((==) t . f)) getActionMessage'
-
-endIf :: Action p (Maybe Bool) -> Action p ()
-endIf a = a >>= \x -> case x of
-    Just True -> end
-    _         -> return ()
-
-ensure :: Action p (Maybe Bool) -> Action p ()
-ensure a = a >>= \x -> case x of
-    Just True -> return ()
-    _         -> end

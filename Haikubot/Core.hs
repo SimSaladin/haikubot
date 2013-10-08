@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot.hs
 -- Creation Date: Dec 29 2012 [20:19:14]
--- Last Modified: Oct 06 2013 [13:38:02]
+-- Last Modified: Oct 08 2013 [20:44:40]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Core
@@ -18,9 +18,13 @@ module Haikubot.Core
 
   -- ** Plugin types
   , HaikuPlugin(..)
+  , PluginAction, PluginResult
   , Plugin(..)
   , Plugins
-  , Res(..)
+
+  -- ** Event results
+  , Res
+  , noop, stop
 
   -- * The Monads
   , Handler
@@ -36,8 +40,8 @@ module Haikubot.Core
 
   -- ** Action helpers
   , lift
+  , liftHandler
   , liftIO
-  , end
   , getActionData
 --   , putActionData
 --   , modifyActionData
@@ -58,7 +62,6 @@ import           Network                        (PortID)
 import           System.IO                      (Handle)
 import           Control.Monad.Error     hiding (lift)
 import           Control.Monad.Reader    hiding (lift)
-import           Control.Monad.IO.Class         (MonadIO, liftIO)
 
 -- | Settings for Haikubot.
 data Config = Config
@@ -93,21 +96,27 @@ type ConId = Text
 -- | Connections used by the bot.
 type Connections = Map.Map ConId Con
 
--- | XXX: wut is this?
-data Res = RSucc [Text]
-         | Rfail Text
+-- | Results from plugin handlers. On Nothing, continue in event stack,
+-- otherwise stop. Left values are errors.
+type Res = Maybe ()
 
+noop, stop :: Action p Res
+noop = return Nothing
+stop = return (Just ())
+
+type PluginAction = forall p. HaikuPlugin p => Action p Res
+type PluginResult = Either String Res
 
 -- | Plugin interface.
 class HaikuPlugin p where
 
   -- | Handle a root command either from command line or from authorized user.
-  handleCmd :: (Text, [Text]) -> Action p ()
+  handleCmd :: (Text, [Text]) -> Action p Res
   handleCmd _ = fail "No action"
 
   -- | Handle a privmsg.
-  handlePrivmsg :: Action p ()
-  handlePrivmsg = fail "No action"
+  handleIrcMessage :: IrcMessage -> Action p Res
+  handleIrcMessage _ = noop
 
   -- | Action to run before haikubot exit.
   onExit :: Action p ()
@@ -115,7 +124,7 @@ class HaikuPlugin p where
 
 data Plugin = forall a. HaikuPlugin a => MkPlugin a
 
-type Plugins = Map.Map Text (Plugin)
+type Plugins = Map.Map Text Plugin
 
 
 -- | Handler monad.
@@ -124,8 +133,8 @@ newtype Handler a = Handler { runH :: ReaderT BotData IO a }
 
 -- | The action monad is provided to simplify plugin writing. It's a MaybeT over
 -- a ReaderT.
-newtype Action p a = Action { runA :: ErrorT (String) (ReaderT (ActionData p) Handler) a }
-  deriving (Monad, MonadIO, MonadPlus, MonadReader (ActionData p), MonadError String)
+newtype Action p a = Action { runA :: ErrorT String (ReaderT (ActionData p) Handler) a }
+  deriving (Functor, Monad, MonadIO, MonadPlus, MonadReader (ActionData p), MonadError String)
 
 -- | Run a handler with empty connections.
 runHandler :: Handler a -> Config -> IO a
@@ -135,10 +144,10 @@ runHandler handler conf = do
     runHandler' handler $ BotData conf' cons
 
 runHandler' :: Handler a -> BotData -> IO a
-runHandler' handler bdata = runReaderT (runH handler) bdata
+runHandler' handler = runReaderT (runH handler)
 
 runAction :: Action p a -> ActionData p -> Handler (Either String a)
-runAction action adata = runReaderT (runErrorT (runA action)) adata
+runAction action = runReaderT (runErrorT (runA action))
 -- runAction' action = runAction action $ ActionData () Nothing Nothing
 
 
@@ -176,6 +185,6 @@ getActionMessage = getActionMessage' >>= \x -> case x of
 lift :: Handler (Maybe a) -> Action p a
 lift handler = Action $ ErrorT $ ReaderT (\_ -> fmap (maybe (Left "") Right) handler)
 
-end :: Action p ()
-end = fail "No operation."
+liftHandler :: Handler a -> Action p a
+liftHandler handler = lift (Just <$> handler)
 

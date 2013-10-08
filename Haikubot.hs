@@ -1,13 +1,13 @@
 ------------------------------------------------------------------------------
 -- File: Bot.hs
 -- Creation Date: Jul 23 2012 [11:10:43]
--- Last Modified: Dec 31 2012 [09:48:03]
+-- Last Modified: Oct 08 2013 [21:38:00]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 
 -- | Useful re-exports for use in plugins.
 module Haikubot
-  ( module Export
+  ( module Export -- this is not visible on haddock, but other modules are(!)
   , module Haikubot.Actions
   , module Haikubot.Connections
   , module Haikubot.Core
@@ -22,12 +22,12 @@ import Haikubot.Core
 import Haikubot.Logging
 import Haikubot.Messages
 import Data.Text      as Export (Text)
-import Data.Monoid    as Export (mappend)
+import Data.Monoid    as Export (mappend, (<>))
 import Control.Monad  as Export
 import System.Exit
 
--- | Exit haikubot. Call the exit handler on plugins first.
+-- | Exit haikubot. Calls the exit handlers on plugins.
 exit :: Handler ()
 exit = do
-    _ <- onPlugins Nothing Nothing onExit
+    void $ onPlugins Nothing Nothing (onExit >> noop)
     liftIO exitSuccess

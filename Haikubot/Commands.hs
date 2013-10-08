@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Haikubot/Commands.hs
 -- Creation Date: Dec 30 2012 [04:09:45]
--- Last Modified: Oct 06 2013 [13:35:09]
+-- Last Modified: Oct 08 2013 [20:44:43]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Commands
@@ -13,8 +13,7 @@ module Haikubot.Commands
   ) where
 
 import Data.Text (Text)
-import Control.Monad (liftM)
-import Data.Monoid (mconcat)
+import Control.Monad
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import System.IO (openFile, hClose, IOMode(ReadMode))
@@ -23,23 +22,27 @@ import Haikubot.Core
 import Haikubot.Actions
 import Haikubot.Messages
 
-type Cmd = (Text, [Text])
+-- * Messages
 
--- | Run handlers for an message
-runMsg :: Maybe Con -> Maybe IrcMessage -> Handler ()
-runMsg mcon mmsg = 
-    onPlugins mmsg mcon handlePrivmsg
-    >> return ()
+-- | Run handlers for an privmsg
+runMsg :: Con -> IrcMessage -> Handler PluginResult
+runMsg con msg =
+    onPlugins (Just con) (Just msg) (handleIrcMessage msg)
+
+-- * Commands
+
+type Cmd = (Text, [Text])
 
 -- | Execute the Cmd.
 runCmd' :: Text -> Handler ()
 runCmd' = runCmd Nothing Nothing
 
--- | Execute the Cmd coming from an irc message.
-runCmd :: Maybe IrcMessage -> Maybe Con -> Text -> Handler ()
-runCmd mmsg mcon cmdtext =
-    onPlugins mmsg mcon (handleCmd $ parseCmd cmdtext)
-    >> return ()
+-- | Execute the Cmd.
+runCmd :: Maybe Con -> Maybe IrcMessage
+       -> Text
+       -> Handler ()
+runCmd mcon mmsg cmdtext = void $
+    onPlugins mcon mmsg (handleCmd $ parseCmd cmdtext)
 
 -- | TODO: support quoting.
 parseCmd :: Text -> Cmd

@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Messages.hs
 -- Creation Date: Dec 30 2012 [02:49:56]
--- Last Modified: Dec 31 2012 [03:04:12]
+-- Last Modified: Oct 08 2013 [20:05:16]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 -- 
 -- |
@@ -52,7 +52,9 @@ data IrcMessage = IrcMessage
   , mCode   :: Text
   , mMsg    :: Text
   , mChan   :: Maybe Text
-  , mOrigin :: Maybe Text   -- ^ Origin of the message, this is mNick if a message was sent directly to the bot, otherwise if it got sent to the channel it's mChan.
+  , mOrigin :: Maybe Text   -- ^ Origin of the message. mNick if the
+                            -- message was received via query and mChan if from
+                            -- a channel.
   , mOther  :: Maybe [Text]
   , mRaw    :: Text
   } deriving (Show, Typeable)
