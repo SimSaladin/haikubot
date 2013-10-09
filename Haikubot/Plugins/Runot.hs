@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Plugins/Runot.hs
 -- Creation Date: Dec 29 2012 [19:38:44]
--- Last Modified: Oct 09 2013 [20:07:47]
+-- Last Modified: Oct 09 2013 [20:25:37]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Plugins.Runot
@@ -43,6 +43,12 @@ data Runot = Runot
   }
 
 instance HaikuPlugin Runot where
+    handleCmd ("haiku?", [x]) = do
+        mget mNick >>= guard . (== Just "bps") -- reply . T.pack . show -- >>= guard . (== Just "bps")
+        aget rHaikuFile
+            >>= liftIO . (getHaiku (read $ T.unpack x) >=> format)
+            >>= mapM_ reply >> stop
+
     handleCmd ("haiku?", _)           = aget rHaikuFile
                                         >>= liftIO . (getRandomHaiku >=> format)
                                         >>= mapM_ reply >> stop
@@ -100,6 +106,10 @@ handleHaiku haiku tavut = if isHaiku rytmi
   where
       rytmi   = rytmit tavut
       pptavut = foldl1 (\x y -> x ++ ('-':y)) (map show rytmi)
+
+getHaiku :: Int -> FilePath -> IO (Either Text Runo)
+getHaiku nth fp = do
+    liftM (Right . read . (!! nth) . lines) (readFile fp)
 
 getRandomHaiku :: FilePath -> IO (Either Text Runo)
 getRandomHaiku fp = do
