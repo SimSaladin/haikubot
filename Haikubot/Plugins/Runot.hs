@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Plugins/Runot.hs
 -- Creation Date: Dec 29 2012 [19:38:44]
--- Last Modified: Oct 09 2013 [02:27:42]
+-- Last Modified: Oct 09 2013 [20:07:47]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Plugins.Runot
@@ -145,6 +145,7 @@ endMonogatari = do
       Nothing         -> void . reply $ "Ei monogataria sinulle"
       Just monogatari -> do
           liftIO . atomically $ putTMVar ref $ Map.delete whoami users
+          distributeMonog monogatari
           saveHaiku (Right monogatari)
 
 -- | End and save all monogataries
@@ -168,3 +169,12 @@ startMonogatari title = do
           in putTMVar ref $ Map.alter (Just . f) whoami users
 
     liftIO $ atomically (readTMVar ref) >>= print . show
+
+distributeMonog :: Monogatari -> Action Runot ()
+distributeMonog monog = do
+    channels <- aget rChannels
+    origin   <- mget mOrigin
+    forM_ channels $ \ch -> do
+        guard $ maybe False (/= ch) origin
+        str <- liftIO . format . Right $ Right monog
+        forM_ str $ privmsg ch

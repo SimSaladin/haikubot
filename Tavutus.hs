@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Tavutus.hs
 -- Creation Date: Jul 06 2012
--- Last Modified: Oct 05 2013 [18:34:47]
+-- Last Modified: Oct 09 2013 [19:58:41]
 -- Created By :   Samuli Thomasson [SimSaladin] samuli.thomassonATgmail.com
 ------------------------------------------------------------------------------
 
@@ -12,13 +12,13 @@ module Tavutus where
 --    ennen viimeistä konsonanttia.
 --
 -- 2. Vokaalisääntö: Jos tavun ensimmäistä vokaalia seuraa toinen vokaali,
---    niiden väliin tulee tavuraja,ellei
+--    niiden väliin tulee tavuraja, ellei
 --    a) edellinen vokaali ole sama kuin jälkimmäinen (pitkä vokaali).
 --    b) jälkimmäinen vokaali ole i (i:hin loppuva diftongi).
 --    c) kysymyksessä ole jokin vokaalipareista au,eu,ie,iu,ou,uo,yö,äy,
 --    öy,ey tai iy (muu diftongi).
 --
--- 3. Diftongisääntö: Jos tavun kuuluvaa difta tai pitkää vokaalia seuraa
+-- 3. Diftongisääntö: Jos tavun kuuluvaa diftongi tai pitkää vokaalia seuraa
 -- vokaali,tähän väliin tulee aina tavuraja.
 --
 -- 4. Poikkeussääntö: Yhdyssanat jaetaan tavuihin sanojen välistä,myös siinä
@@ -27,60 +27,89 @@ module Tavutus where
 -- references: http://teppo.tv/haikueditori/tavutus.html
 --             http://fi.wikipedia.org/wiki/Tavu
 --
+-- Update (10/2013)
+--
+--   + Diftongit 1. tavussa: kaikki
 
 import Text.ParserCombinators.Parsec
-import Data.Monoid
+--import Data.Monoid
+import Control.Applicative hiding ((<|>), many)
 import Data.List (delete)
+import qualified Data.List as L
 import Data.Char (toUpper)
 
+import Debug.Trace
+
+type Tavu  = String
+type Sana  = [Tavu]
+type Sae   = [Sana]
+type Runo  = [Sae]
+
+-- * Entry points
+
+-- | Säkeet erotetaan ";":lla tai "/". tai "//":lla.
+tavutaRuno :: String -> Either ParseError Runo
+tavutaRuno input = (delete []) <$> parse runo "" ((dropWhile (== ' ') input) ++ " ")
+
+-- | Tavutus PP.
+printTavut :: Runo -> String
+printTavut = L.intercalate " // " . map (L.intercalate " " . map (L.intercalate "-"))
+
+-- * Chars, Tavut
+
+kons, voks          :: [Char]
 kons = "BCDFGHJKLMNPRSTVZXbcdfghjklmnŋprsštvzžx"
 voks = "AEIOUYÄÖaeiouyäö"
 
-printTavut :: [[[String]]] -> String
-printTavut s = foldl1 (\x y -> x ++ "; " ++ y) (map psae s)
-   where
-      psae :: [[String]] -> String
-      psae []  = ""
-      psae sae = foldl1 (\x y -> x ++ " " ++ y) (map psana sae)
+kon,  vok           :: Parser Char
+kon  = oneOf kons
+vok  = oneOf voks
 
-      psana :: [String] -> String
-      psana []   = ""
-      psana sana = foldl1 (\x y -> x ++ "-" ++ y) sana
+vok2, dft, dft2, puncts :: Parser String
+vok2 = choice $ map (try . string) $ flip concatMap "aeiouyäö"
+    (\x -> let y = toUpper x in [x, x] : [x, y] : [y, x] : [[y,y]])
 
-kon = oneOf kons
-vok = oneOf voks
-dift = foldl1 (<|>) $ map (try . string) $ concatMap
-   (\[a,b] -> [toUpper a:[b], toUpper a:[toUpper b], a:[toUpper b], a:[b]])
-   [ "ai","ei","oi","ui","yi","äi","öi"
-   , "au","eu","iu","ou","ie","uo","yö"
-   , "äy","öy","ey","iy"
-   ]
+f_dft :: [Tavu] -> Parser String
+f_dft = choice . map (try . string) . concatMap
+    (\[a, b] -> let f = toUpper in [f a,b]:[f a,f b]:[a,f b]:[[a, b]])
 
-vokDouble = foldl1 (<|>) $ map (try . string) $ concatMap
-   (\x -> [x:[x], x:[toUpper x], (toUpper x):[x], (toUpper x):[toUpper x]])
-   "aeiouyäö"
+dft  = f_dft [ "ai","ei","oi","ui","yi","äi","öi"
+             , "au","eu","iu","ou","ie","uo","yö"
+             , "äy","öy","ey","iy" ]
 
-tavutaRuno :: String -> Either ParseError [[[String]]]
-tavutaRuno input = fmap (delete []) $ parse parseRuno "" ((dropWhile (== ' ') input) ++ " ")
+-- | version of diftongs on non-first syllables; excludes ie uo yö.
+dft2 = f_dft [ "ai","ei","oi","ui","yi","äi","öi"
+             , "au","eu","iu","ou"
+             , "äy","öy","ey","iy" ]
 
-parseRuno :: Parser [[[String]]]
-parseRuno = sepEndBy parseTavutaSanat (many1 (many space >> many1 (char ';') >> many space))
+puncts = many . noneOf $ kons ++ voks ++ " ;/"
 
-parseTavutaSanat :: Parser [[String]]
-parseTavutaSanat = sepEndBy (many1 parseTavu) (many1 space)
+-- * Parsers
 
-parseTavu :: Parser String
-parseTavu = do
-   puncts' <- many (noneOf (kons ++ voks ++ " ;"))
-   ks <- many kon         
-   v  <- try dift <|> try vokDouble <|> fmap return vok 
-   ls <- try loppuuKon <|> many (try (kon `followedByY` (kon >> (try kon <|> vok))))
-   puncts <- many (noneOf (kons ++ voks ++ " ;"))
-   return (puncts' ++ ks ++ v ++ ls ++ puncts)
+runo :: Parser Runo
+runo = sepEndBy sae $
+    many1 $ many space >> many1 (char ';' <|> char '/') >> many space
 
-loppuuKon :: Parser String
-loppuuKon = many kon >>= \r -> try $ lookAhead (noneOf (kons ++ voks)) >> return r
+sae :: Parser Sae
+sae = sepEndBy sana (many1 space)
 
-followedByY :: Parser Char -> Parser Char -> Parser Char
-followedByY x y = x >>= \r -> lookAhead y >> return r
+sana :: Parser Sana
+sana = (\x xs -> x : xs) <$> ekaTavu
+                         <*> many jatkoTavu
 
+ekaTavu, jatkoTavu :: Parser String
+ekaTavu = (\p k v k' -> p ++ k ++ v ++ k')
+    <$> puncts <*> many kon
+    <*> choice [dft, vok2, fmap return vok]
+    <*> choice [endsKon, initKons ]
+
+jatkoTavu = (\p k v k' p' -> p ++ k ++ v ++ k' ++ p')
+    <$> puncts <*> many kon
+    <*> choice [dft2, vok2, fmap return vok]
+    <*> choice [endsKon, initKons ]
+    <*> puncts
+
+
+endsKon, initKons :: Parser String
+endsKon  =        try $ many kon <* (lookAhead . noneOf $ kons ++ voks)
+initKons = many . try $      kon <* (lookAhead $ kon >> choice [try kon, vok]) 
