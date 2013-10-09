@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Plugins/Runot.hs
 -- Creation Date: Dec 29 2012 [19:38:44]
--- Last Modified: Oct 09 2013 [20:25:37]
+-- Last Modified: Oct 10 2013 [00:41:06]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Plugins.Runot
@@ -98,10 +98,10 @@ handleHaiku haiku tavut = if isHaiku rytmi
         whoami  <- liftM (fromMaybe "(no-one)") maybeOrigin
         ref     <- aget rHaikuMonogataries
         users   <- liftIO . atomically $ takeTMVar ref
-        case Map.lookup whoami users of
-            Nothing         -> saveHaiku (Left haiku)
-            Just (a,b,xs)   -> liftIO . atomically . putTMVar ref 
-                        $ Map.insert whoami (a, b, xs ++ [haiku]) users
+        users'  <- case Map.lookup whoami users of
+            Nothing         -> saveHaiku (Left haiku) >> return users
+            Just (a,b,xs)   -> return $ Map.insert whoami (a, b, xs ++ [haiku]) users
+        liftIO . atomically $ putTMVar ref users'
     else void . reply . T.pack $ "onko näin? " ++ pptavut ++ ": " ++ printTavut tavut
   where
       rytmi   = rytmit tavut
