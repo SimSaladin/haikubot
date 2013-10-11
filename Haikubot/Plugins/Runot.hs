@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Plugins/Runot.hs
 -- Creation Date: Dec 29 2012 [19:38:44]
--- Last Modified: Oct 10 2013 [00:41:06]
+-- Last Modified: Oct 10 2013 [17:49:08]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Plugins.Runot
@@ -131,10 +131,14 @@ format (Right (Right (origin, title, haikut))) = do
         $ mapM (liftM ("  " <>) . formatHaiku) haikut
 
 formatHaiku :: Haiku -> IO Text
-formatHaiku (Haiku by time haiku) = liftM (\t -> haiku <> "  -- " <> by <> ", " <> t) $ formatTime' time
+formatHaiku (Haiku by time haiku) = liftM (\t -> haiku <> "  -- " <> by <> ", " <> t) $
+    formatTime' time
 
 formatTime' :: UTCTime -> IO Text
-formatTime' time = liftM (T.pack . formatTime defaultTimeLocale "%k:%M (%d.%m-%y)" . flip utcToZonedTime time) getCurrentTimeZone
+formatTime' time = liftM (T.pack .
+    formatTime defaultTimeLocale "%k:%M (%d.%m-%y)" .
+    flip utcToZonedTime time
+    ) getCurrentTimeZone
 
 isHaiku :: [Int] -> Bool
 isHaiku = (==) [5,7,5]
