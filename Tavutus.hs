@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Tavutus.hs
 -- Creation Date: Jul 06 2012
--- Last Modified: Oct 10 2013 [00:14:49]
+-- Last Modified: Oct 13 2013 [02:27:41]
 -- Created By :   Samuli Thomasson [SimSaladin] samuli.thomassonATgmail.com
 ------------------------------------------------------------------------------
 
@@ -88,28 +88,26 @@ puncts = many . noneOf $ kons ++ voks ++ " ;/"
 
 runo :: Parser Runo
 runo = sepEndBy sae $
-    many1 $ many space >> many1 (char ';' <|> char '/') >> many space
+    many1 $ many space >> many1 (char ';' <|> char '/' <?> "a säe") >> many space
 
 sae :: Parser Sae
 sae = sepEndBy sana (many1 space)
 
 sana :: Parser Sana
-sana = (\x xs -> x : xs) <$> ekaTavu
-                         <*> many jatkoTavu
+sana = (:) <$> ekaTavu <*> many jatkoTavu
 
 ekaTavu, jatkoTavu :: Parser String
 ekaTavu = (\p k v k' p' -> p ++ k ++ v ++ k' ++ p')
     <$> puncts <*> many kon
-    <*> choice [dft, vok2, fmap return vok]
+    <*> (choice [dft, vok2, fmap return vok] <?> "a vokaali")
     <*> choice [endsKon, initKons ]
     <*> puncts
 
 jatkoTavu = (\p k v k' p' -> p ++ k ++ v ++ k' ++ p')
     <$> puncts <*> many kon
-    <*> choice [dft2, vok2, fmap return vok]
+    <*> (choice [dft2, vok2, fmap return vok] <?> "a vokaali")
     <*> choice [endsKon, initKons ]
     <*> puncts
-
 
 endsKon, initKons :: Parser String
 endsKon  =        try $ many kon <* (lookAhead . noneOf $ kons ++ voks)
