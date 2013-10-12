@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Tavutus.hs
 -- Creation Date: Jul 06 2012
--- Last Modified: Oct 09 2013 [19:58:41]
+-- Last Modified: Oct 10 2013 [00:14:49]
 -- Created By :   Samuli Thomasson [SimSaladin] samuli.thomassonATgmail.com
 ------------------------------------------------------------------------------
 
@@ -98,10 +98,11 @@ sana = (\x xs -> x : xs) <$> ekaTavu
                          <*> many jatkoTavu
 
 ekaTavu, jatkoTavu :: Parser String
-ekaTavu = (\p k v k' -> p ++ k ++ v ++ k')
+ekaTavu = (\p k v k' p' -> p ++ k ++ v ++ k' ++ p')
     <$> puncts <*> many kon
     <*> choice [dft, vok2, fmap return vok]
     <*> choice [endsKon, initKons ]
+    <*> puncts
 
 jatkoTavu = (\p k v k' p' -> p ++ k ++ v ++ k' ++ p')
     <$> puncts <*> many kon
