@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Plugins/Runot.hs
 -- Creation Date: Dec 29 2012 [19:38:44]
--- Last Modified: Oct 13 2013 [02:25:27]
+-- Last Modified: Oct 13 2013 [02:56:50]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Plugins.Runot
@@ -68,14 +68,20 @@ instance HaikuPlugin Runot where
 
     onExit = endMonogataries
 
+whoami :: Action Runot (Maybe Text)
+whoami = mget mNick
+
+origin :: Action Runot (Maybe Text)
+origin = maybeOrigin
+
 doHaiku :: Text -> Action Runot Res
 doHaiku msg = case tavutaRuno (T.unpack msg) of
     Left  err   -> reply $ "Osaatko kirjoittaa? "
                         <> (T.pack . unwords . lines $ show err)
     Right tavut -> do
-        whoami  <- liftM (fromMaybe "(no-one)") maybeOrigin
+        iam <- liftM (fromMaybe "%admin%") whoami
         time    <- liftIO getCurrentTime
-        let haiku = Haiku whoami time msg
+        let haiku = Haiku iam time msg
             in handleHaiku haiku tavut
         stop
 
@@ -100,12 +106,12 @@ setHaikus haikus = do
 handleHaiku :: Haiku -> [[[String]]] -> Action Runot ()
 handleHaiku haiku tavut = if isHaiku rytmi
     then do
-        whoami  <- liftM (fromMaybe "(no-one)") maybeOrigin
+        iam     <- liftM (fromMaybe "(no-one)") whoami
         ref     <- aget rHaikuMonogataries
         users   <- liftIO . atomically $ takeTMVar ref
-        users'  <- case Map.lookup whoami users of
+        users'  <- case Map.lookup iam users of
             Nothing         -> saveHaiku (Left haiku) >> return users
-            Just (a,b,xs)   -> return $ Map.insert whoami (a, b, xs ++ [haiku]) users
+            Just (a,b,xs)   -> return $ Map.insert iam (a, b, xs ++ [haiku]) users
         liftIO . atomically $ putTMVar ref users'
     else void . reply . T.pack $ "onko näin? " ++ pptavut ++ ": " ++ printTavut tavut
   where
@@ -156,15 +162,15 @@ rytmit = map (sum . map length)
 
 endMonogatari :: Action Runot ()
 endMonogatari = do
-  whoami <- requireOrigin
-  ref    <- aget rHaikuMonogataries
-  users  <- liftIO . atomically $ takeTMVar ref
-  case Map.lookup whoami users of
-      Nothing         -> void $ reply  "Ei monogataria sinulle"
-      Just monogatari -> do
-          liftIO . atomically $ putTMVar ref $ Map.delete whoami users
-          distributeMonog monogatari
-          saveHaiku (Right monogatari)
+    from   <- liftM (fromMaybe "(no-one)") origin
+    ref    <- aget rHaikuMonogataries
+    users  <- liftIO . atomically $ takeTMVar ref
+    case Map.lookup from users of
+        Nothing         -> void $ reply  "Ei monogataria sinulle"
+        Just monogatari -> do
+            liftIO . atomically $ putTMVar ref $ Map.delete from users
+            distributeMonog monogatari
+            saveHaiku (Right monogatari)
 
 -- | End and save all monogataries
 endMonogataries :: Action Runot ()
@@ -177,33 +183,34 @@ endMonogataries = do
 
 startMonogatari :: Text -> Action Runot ()
 startMonogatari title = do
-    ref    <- aget rHaikuMonogataries
-    whoami <- requireOrigin
+    ref  <- aget rHaikuMonogataries
+    from <- liftM (fromMaybe "(no-one)") origin
 
     liftIO . atomically $ do
       users <- takeTMVar ref
-      let f Nothing                = (whoami, title, [])
-          f (Just (origin, _, xs)) = (origin, title, xs) -- rename monogatari
-          in putTMVar ref $ Map.alter (Just . f) whoami users
+      let f Nothing               = (from, title, [])
+          f (Just (from', _, xs)) = (from', title, xs) -- rename monogatari
+          in putTMVar ref $ Map.alter (Just . f) from users
 
     liftIO $ atomically (readTMVar ref) >>= print . show
 
--- | Get and save implicit monogatari, if available
+-- | Get and save implicit monogatari of USER, if available
 implicitMonogatari :: Text -> Action Runot Res
 implicitMonogatari title = do
-    whoami <- requireOrigin
+    from      <- liftM (fromMaybe "(no-one)") origin
+    iam       <- liftM (fromMaybe "(no-one")  whoami
     haikuFile <- aget rHaikuFile
-    exists <- liftIO $ doesFileExist haikuFile
+    exists    <- liftIO $ doesFileExist haikuFile
     if exists
         then do
             haikus <- liftIO $ liftM (map read . reverse . lines) $ readFile haikuFile
-            let ismine (Left (Haiku author _ _)) = whoami == author
+            let ismine (Left (Haiku author _ _)) = iam == author
                 ismine _                         = False
                 unLeft (Left x) = x
-            case takeWhile ismine $ reverse haikus of
+            case takeWhile ismine haikus of
                 [] -> reply "Yhtään haikua ei löytynyt monogatariin"
                 xs -> do
-                    let monog = (whoami, title, map unLeft xs)
+                    let monog = (from, title, map unLeft xs)
                         rest  = reverse (Right monog : drop (length xs) haikus)
                     setHaikus rest
                     reply $ "Implisiittinen monogotari: " <> title
