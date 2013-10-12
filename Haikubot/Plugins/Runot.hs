@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Plugins/Runot.hs
 -- Creation Date: Dec 29 2012 [19:38:44]
--- Last Modified: Oct 10 2013 [17:49:08]
+-- Last Modified: Oct 13 2013 [02:25:27]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Plugins.Runot
@@ -54,6 +54,7 @@ instance HaikuPlugin Runot where
                                         >>= mapM_ reply >> stop
     handleCmd ("haiku", xs)           = doHaiku (T.unwords xs)
     handleCmd ("monogatari", ["end"]) = endMonogatari                  >> stop
+    handleCmd ("monogatari", ["my", "impl", title]) = implicitMonogatari title
     handleCmd ("monogatari", xs)      = startMonogatari (T.unwords xs) >> stop
     handleCmd (_, _)                  = noop
 
@@ -91,6 +92,10 @@ saveHaiku x = do
                                                  " (" <> (T.pack $ show $ length xs) <> " haikua)."
         _ -> return ()
     
+setHaikus :: [Either Haiku Monogatari] -> Action Runot ()
+setHaikus haikus = do
+        haikuFile <- aget rHaikuFile
+        liftIO . writeFile haikuFile . unlines $ map show haikus
 
 handleHaiku :: Haiku -> [[[String]]] -> Action Runot ()
 handleHaiku haiku tavut = if isHaiku rytmi
@@ -119,7 +124,7 @@ getRandomHaiku fp = do
     then do
       lns <- liftM lines (readFile fp)
       if length lns >= 1
-         then liftM (Right . read . (!!) lns . (`mod` (length lns))) randomIO
+         then liftM (Right . read . (lns !!) . (`mod` length lns)) randomIO
          else return $ Left "i haz no haikuz!"
     else return $ Left "i haz no haikufilez!!"
 
@@ -127,7 +132,7 @@ format :: Either Text Runo -> IO [Text]
 format (Left err)           = return [ "Error: " <> err <> ". This shouldn't happen." ]
 format (Right (Left haiku)) = formatHaiku haiku >>= \x -> return [x]
 format (Right (Right (origin, title, haikut))) = do
-    liftM ( ("Monogatari: "<>title<>" ("<>origin<>")") :)
+    liftM (("Monogatari: " <> title <> " (" <> origin <> ")") :)
         $ mapM (liftM ("  " <>) . formatHaiku) haikut
 
 formatHaiku :: Haiku -> IO Text
@@ -151,12 +156,11 @@ rytmit = map (sum . map length)
 
 endMonogatari :: Action Runot ()
 endMonogatari = do
-  ref    <- aget rHaikuMonogataries
   whoami <- requireOrigin
+  ref    <- aget rHaikuMonogataries
   users  <- liftIO . atomically $ takeTMVar ref
-
   case Map.lookup whoami users of
-      Nothing         -> void . reply $ "Ei monogataria sinulle"
+      Nothing         -> void $ reply  "Ei monogataria sinulle"
       Just monogatari -> do
           liftIO . atomically $ putTMVar ref $ Map.delete whoami users
           distributeMonog monogatari
@@ -169,7 +173,7 @@ endMonogataries = do
     (liftIO . atomically . takeTMVar) ref >>= sequence_ . Map.elems . Map.mapWithKey f
     (liftIO . atomically . putTMVar ref) Map.empty
   where
-      f user monog = saveHaiku (Right monog)
+      f _user monog = saveHaiku (Right monog)
 
 startMonogatari :: Text -> Action Runot ()
 startMonogatari title = do
@@ -183,6 +187,29 @@ startMonogatari title = do
           in putTMVar ref $ Map.alter (Just . f) whoami users
 
     liftIO $ atomically (readTMVar ref) >>= print . show
+
+-- | Get and save implicit monogatari, if available
+implicitMonogatari :: Text -> Action Runot Res
+implicitMonogatari title = do
+    whoami <- requireOrigin
+    haikuFile <- aget rHaikuFile
+    exists <- liftIO $ doesFileExist haikuFile
+    if exists
+        then do
+            haikus <- liftIO $ liftM (map read . reverse . lines) $ readFile haikuFile
+            let ismine (Left (Haiku author _ _)) = whoami == author
+                ismine _                         = False
+                unLeft (Left x) = x
+            case takeWhile ismine $ reverse haikus of
+                [] -> reply "Yhtään haikua ei löytynyt monogatariin"
+                xs -> do
+                    let monog = (whoami, title, map unLeft xs)
+                        rest  = reverse (Right monog : drop (length xs) haikus)
+                    setHaikus rest
+                    reply $ "Implisiittinen monogotari: " <> title
+                    distributeMonog monog
+                    stop
+        else reply "Error: no haiku file(!)"
 
 distributeMonog :: Monogatari -> Action Runot ()
 distributeMonog monog = do
