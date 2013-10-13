@@ -1,6 +1,13 @@
 # Haikubot
 
 
+## TODO list
+
+monogataries:
+@monogatari impl ( timeframe | user1,user2,...) title
+    => request @confirm from user1...userN
+    => add the implicit monogotari
+
 ## Internal structure
 
    # x
