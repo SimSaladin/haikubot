@@ -32,6 +32,7 @@ import Control.Applicative hiding ((<|>), many)
 import qualified Data.List as L
 import Data.Char (toUpper)
 import Data.String (IsString)
+import Data.Maybe
 
 -- * Entry points
 
@@ -103,7 +104,10 @@ runo = sepEndBy sae . many1 $
     between (many space) (many space) $ many1 (char ';' <|> char '/' <?> "a säe")
 
 sae :: Parser Sae
-sae = sepEndBy sana (many1 space)
+sae = catMaybes <$> sepEndBy sanaLike (many1 space)
+    where
+        sanaLike = (Just <$> try sana) <|>
+                   (many1 punct_mark >> return Nothing) <?> "sana"
 
 sana :: Parser Sana
 sana = concat <$> sequence

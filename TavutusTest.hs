@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File:          
 -- Creation Date:
--- Last Modified: Oct 25 2013 [02:10:20]
+-- Last Modified: Oct 25 2013 [02:33:46]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 
@@ -50,6 +50,8 @@ exact = [ ("a o e i u y ö ä"
 
         , ( "eka ; toka ;;; kolmas"
           , [ [["e","ka"]],[["to","ka"]],[["kol","mas"]]] )
+
+        , ("a - bee", [[ ["a"], ["bee"]]])
         ]
 
 tests = TestList $
