@@ -1,12 +1,7 @@
-------------------------------------------------------------------------------
--- File:          Tavutus.hs
--- Creation Date: Jul 06 2012
--- Last Modified: Oct 10 2013 [01:24:16]
--- Created By :   Samuli Thomasson [SimSaladin] samuli.thomassonATgmail.com
-------------------------------------------------------------------------------
-
-module Tavutus where
-
+{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving #-}
+-- Finnish syllabification.
+--
+--
 -- 1. Konsonanttisääntö: Jos tavuun kuuluvaa vokaalia seuraa yksi tai useampia
 --    konsonantteja,joita vielä seuraa vokaali,tavuraja sijoittuu välittömästi
 --    ennen viimeistä konsonanttia.
@@ -30,59 +25,77 @@ module Tavutus where
 -- Update (10/2013)
 --
 --   + Diftongit 1. tavussa: kaikki
+module Tavutus where
 
 import Text.ParserCombinators.Parsec
---import Data.Monoid
 import Control.Applicative hiding ((<|>), many)
 import Data.List (delete)
 import qualified Data.List as L
 import Data.Char (toUpper)
-
-import Debug.Trace
-
-type Tavu  = String
-type Sana  = [Tavu]
-type Sae   = [Sana]
-type Runo  = [Sae]
+import Data.String (IsString)
 
 -- * Entry points
 
--- | Säkeet erotetaan ";":lla tai "/". tai "//":lla.
+-- | Säkeet erotetaan \";\":lla tai \"/\". tai \"//\":lla.
 tavutaRuno :: String -> Either ParseError Runo
-tavutaRuno input = (delete []) <$> parse runo "" ((dropWhile (== ' ') input) ++ " ")
+tavutaRuno input = delete [] <$> parse runo "" input
 
 -- | Tavutus PP.
 printTavut :: Runo -> String
-printTavut = L.intercalate " // " . map (L.intercalate " " . map (L.intercalate "-"))
+printTavut = f " // " . f " " $ f "-" unTavu
+        where
+            f x g = L.intercalate x . map g
 
--- * Chars, Tavut
+-- * Implementation (Finnish)
 
-kons, voks          :: [Char]
-kons = "BCDFGHJKLMNPRSTVZXbcdfghjklmnŋprsštvzžx"
-voks = "AEIOUYÄÖaeiouyäö"
+newtype Tavu = Tavu { unTavu :: [Char] } deriving (Eq, IsString)
+type Sana    = [Tavu]
+type Sae     = [Sana]
+type Runo    = [Sae]
 
-kon,  vok           :: Parser Char
-kon  = oneOf kons
-vok  = oneOf voks
+tavu :: Parser String -> Parser Tavu
+tavu = fmap Tavu
 
-vok2, dft, dft2, puncts :: Parser String
-vok2 = choice $ map (try . string) $ flip concatMap "aeiouyäö"
-    (\x -> let y = toUpper x in [x, x] : [x, y] : [y, x] : [[y,y]])
+instance Show Tavu where
+    show (Tavu xs) = xs
 
-f_dft :: [Tavu] -> Parser String
-f_dft = choice . map (try . string) . concatMap
-    (\[a, b] -> let f = toUpper in [f a,b]:[f a,f b]:[a,f b]:[[a, b]])
+-- ** Characters
 
-dft  = f_dft [ "ai","ei","oi","ui","yi","äi","öi"
-             , "au","eu","iu","ou","ie","uo","yö"
-             , "äy","öy","ey","iy" ]
+consonants, vowels', vowels :: [Char]
+consonants = "BCDFGHJKLMNPRSTVZXbcdfghjklmnŋprsštvzžx"
+vowels' = "aeiouyäö"
+vowels  = (++) <*> map toUpper $ vowels'
 
--- | version of diftongs on non-first syllables; excludes ie uo yö.
-dft2 = f_dft [ "ai","ei","oi","ui","yi","äi","öi"
-             , "au","eu","iu","ou"
-             , "äy","öy","ey","iy" ]
+weak_diphs, strong_diphs :: [String]
+weak_diphs   = ["ie","uo","yö"]
+strong_diphs = ["ai","ei","oi","ui","yi","äi","öi","au","eu","iu","ou", {- weak -} "äy","öy","ey","iy"]
 
-puncts = many . noneOf $ kons ++ voks ++ " ;/"
+-- ** Parsers
+
+vowel, consonant :: Parser Char
+consonant = oneOf consonants
+vowel     = oneOf vowels
+
+strong_diph, weak_diph, any_diph :: Parser String
+(strong_diph, weak_diph, any_diph) = ( choiceTavu strong_diphs
+                                     , choiceTavu weak_diphs
+                                     , choiceTavu $ strong_diphs ++ weak_diphs )
+
+-- | aa, ee, ii, ...
+double_vowel :: Parser String
+double_vowel = choiceTavu $ replicate 2 `map` vowels
+
+-- | Something else than a (known) vowel, consonant or reserved (\";\" and \"/\").
+punct_mark :: Parser Char
+punct_mark = noneOf $ consonants ++ vowels ++ " ;/"
+
+-- | 
+choiceTavu :: [String] -> Parser String
+choiceTavu = choice . map (try . string) . concatMap caseAlt
+
+caseAlt :: String -> [String]
+caseAlt [a, b] = [[f a, b], [f a, f b], [a, f b], [a, b]] where f = toUpper
+caseAlt      _ = error "Unhandled input"
 
 -- * Parsers
 
@@ -94,21 +107,28 @@ sae :: Parser Sae
 sae = sepEndBy sana (many1 space)
 
 sana :: Parser Sana
-sana = (:) <$> ekaTavu <*> many jatkoTavu
+sana = (:) <$> tavuFirst <*> many tavuNth
 
-ekaTavu, jatkoTavu :: Parser String
-ekaTavu = (\p k v k' p' -> p ++ k ++ v ++ k' ++ p')
-    <$> puncts <*> many kon
-    <*> (choice [dft, vok2, fmap return vok] <?> "a vokaali")
-    <*> choice [endsKon, initKons ]
-    <*> puncts
+tavuPre :: Parser String -> Parser Tavu
+tavuPre diph = tavu $ concat <$> sequence
+        [ many punct_mark
+        , many consonant
+        , choice [diph, double_vowel, pure <$> vowel] <?> "a vowel"
+        , choice [consonantEnd, consonantInit]        <?> "a consonant"
+        , many punct_mark
+        ]
 
-jatkoTavu = (\p k v k' p' -> p ++ k ++ v ++ k' ++ p')
-    <$> puncts <*> many kon
-    <*> (choice [dft2, vok2, fmap return vok] <?> "a vokaali")
-    <*> choice [endsKon, initKons ]
-    <*> puncts
+tavuFirst, tavuNth :: Parser Tavu
+tavuFirst = tavuPre any_diph
+tavuNth   = tavuPre strong_diph
 
-endsKon, initKons :: Parser String
-endsKon  =        try $ many kon <* (lookAhead . noneOf $ kons ++ voks)
-initKons = many . try $      kon <* (lookAhead $ kon >> choice [try kon, vok]) 
+-- | If only consonants ahead (no vowels) => consume them all.
+consonantEnd :: Parser String
+consonantEnd  = try $ many consonant <* lookAhead eow
+    where eow = choice [noneOf (vowels ++ consonants) >> return (), eof]
+
+-- | Of n (>= 0) consonants ahead, consume the first n-1.
+consonantInit :: Parser String
+consonantInit = many $ try (consonant <* lookAhead twoConAhead)
+    where twoConAhead = consonant >> choice [try consonant, vowel]
+

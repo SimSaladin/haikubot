@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- File:          Plugins/Runot.hs
 -- Creation Date: Dec 29 2012 [19:38:44]
--- Last Modified: Oct 13 2013 [02:25:27]
+-- Last Modified: Oct 24 2013 [23:59:10]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Plugins.Runot
@@ -12,8 +12,10 @@ module Haikubot.Plugins.Runot
 
 import           Haikubot
 import           Tavutus (tavutaRuno, printTavut)
+import qualified Tavutus
 
 import           Data.Time
+import qualified Data.List as L
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Control.Concurrent.STM
@@ -26,16 +28,11 @@ import           System.Locale
 if' :: Bool -> a -> a -> a
 if' ehto sitten muuten = if ehto then sitten else muuten
 
-type UserId = Text
-
-data Haiku = Haiku UserId UTCTime Text
-             deriving (Show, Read)
-
+type UserId     = Text
+data Haiku      = Haiku UserId UTCTime Text deriving (Show, Read)
 type Monogatari = (Text, Text, [Haiku]) -- ^ Origin, Title , haikus
-
-type Runo = Either Haiku Monogatari
-
-data Runot = Runot
+type Runo       = Either Haiku Monogatari
+data Runot      = Runot
   { rChannels   :: [Text]       -- ^ Channels where only haikus are permitted
   , rHaikuFile  :: FilePath     -- ^ File to save/read haikus
   , rHaikuFails :: Map.Map Text Int
@@ -70,13 +67,13 @@ instance HaikuPlugin Runot where
 
 doHaiku :: Text -> Action Runot Res
 doHaiku msg = case tavutaRuno (T.unpack msg) of
-    Left  err   -> reply $ "Osaatko kirjoittaa? "
-                        <> (T.pack . unwords . lines $ show err)
-    Right tavut -> do
+    Left  err  -> reply $ "Osaatko kirjoittaa? "
+                       <> (T.pack . unwords . lines $ show err)
+    Right parsed -> do
         whoami  <- liftM (fromMaybe "(no-one)") maybeOrigin
         time    <- liftIO getCurrentTime
         let haiku = Haiku whoami time msg
-            in handleHaiku haiku tavut
+            in handleHaiku haiku parsed
         stop
 
 saveHaiku :: Runo -> Action Runot ()
@@ -97,20 +94,20 @@ setHaikus haikus = do
         haikuFile <- aget rHaikuFile
         liftIO . writeFile haikuFile . unlines $ map show haikus
 
-handleHaiku :: Haiku -> [[[String]]] -> Action Runot ()
-handleHaiku haiku tavut = if isHaiku rytmi
-    then do
+handleHaiku :: Haiku -> Tavutus.Runo -> Action Runot ()
+handleHaiku haiku tavut 
+    | isHaiku (rytmit tavut) = do
         whoami  <- liftM (fromMaybe "(no-one)") maybeOrigin
         ref     <- aget rHaikuMonogataries
         users   <- liftIO . atomically $ takeTMVar ref
         users'  <- case Map.lookup whoami users of
             Nothing         -> saveHaiku (Left haiku) >> return users
-            Just (a,b,xs)   -> return $ Map.insert whoami (a, b, xs ++ [haiku]) users
+            Just (a, b, xs) -> return $ Map.insert whoami (a, b, xs ++ [haiku]) users
         liftIO . atomically $ putTMVar ref users'
-    else void . reply . T.pack $ "onko näin? " ++ pptavut ++ ": " ++ printTavut tavut
-  where
-      rytmi   = rytmit tavut
-      pptavut = foldl1 (\x y -> x ++ ('-':y)) (map show rytmi)
+    | otherwise = void . reply . T.pack
+                    $ "onko näin? "
+                    <> L.intercalate "-" (map show $ rytmit tavut)
+                    <> ": " <> printTavut tavut
 
 getHaiku :: Int -> FilePath -> IO (Either Text Runo)
 getHaiku nth fp = do
@@ -148,9 +145,8 @@ formatTime' time = liftM (T.pack .
 isHaiku :: [Int] -> Bool
 isHaiku = (==) [5,7,5]
 
-rytmit :: [[[String]]] -> [Int]
-rytmit = map (sum . map length)
-
+rytmit :: Tavutus.Runo -> [Int]
+rytmit = map $ sum . map length
 
 -- * Monogataries
 
@@ -200,13 +196,14 @@ implicitMonogatari title = do
             let ismine (Left (Haiku author _ _)) = whoami == author
                 ismine _                         = False
                 unLeft (Left x) = x
+                unLeft       _  = error "unLeft: not Left"
             case takeWhile ismine $ reverse haikus of
                 [] -> reply "Yhtään haikua ei löytynyt monogatariin"
                 xs -> do
-                    let monog = (whoami, title, map unLeft xs)
+                    let monog = (whoami, title, map unLeft xs) -- mgs. are not recursive :)
                         rest  = reverse (Right monog : drop (length xs) haikus)
                     setHaikus rest
-                    reply $ "Implisiittinen monogotari: " <> title
+                    void $ reply $ "Implisiittinen monogotari: " <> title
                     distributeMonog monog
                     stop
         else reply "Error: no haiku file(!)"
