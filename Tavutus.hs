@@ -29,7 +29,6 @@ module Tavutus where
 
 import Text.ParserCombinators.Parsec
 import Control.Applicative hiding ((<|>), many)
-import Data.List (delete)
 import qualified Data.List as L
 import Data.Char (toUpper)
 import Data.String (IsString)
@@ -38,7 +37,7 @@ import Data.String (IsString)
 
 -- | Säkeet erotetaan \";\":lla tai \"/\". tai \"//\":lla.
 tavutaRuno :: String -> Either ParseError Runo
-tavutaRuno input = delete [] <$> parse runo "" input
+tavutaRuno input = parse runo "" input
 
 -- | Tavutus PP.
 printTavut :: Runo -> String
@@ -100,23 +99,28 @@ caseAlt      _ = error "Unhandled input"
 -- * Parsers
 
 runo :: Parser Runo
-runo = sepEndBy sae $
-    many1 $ many space >> many1 (char ';' <|> char '/' <?> "a säe") >> many space
+runo = sepEndBy sae . many1 $
+    between (many space) (many space) $ many1 (char ';' <|> char '/' <?> "a säe")
 
 sae :: Parser Sae
 sae = sepEndBy sana (many1 space)
 
 sana :: Parser Sana
-sana = (:) <$> tavuFirst <*> many tavuNth
+sana = concat <$> sequence
+        [ pure <$> tavuFirst
+        , (concat <$>) . many . try $ sequence [tavuNth, tavuFirst]
+        , many tavuNth ]
+
+pair :: Parser Tavu -> Parser Tavu -> Parser Sana
+pair x y = sequence [x, y]
 
 tavuPre :: Parser String -> Parser Tavu
 tavuPre diph = tavu $ concat <$> sequence
         [ many punct_mark
         , many consonant
-        , choice [diph, double_vowel, pure <$> vowel] <?> "a vowel"
-        , choice [consonantEnd, consonantInit]        <?> "a consonant"
-        , many punct_mark
-        ]
+        , choice [diph, double_vowel, pure <$> vowel] <?> "a letter"
+        , choice [consonantEnd, consonantInit]
+        , many punct_mark ]
 
 tavuFirst, tavuNth :: Parser Tavu
 tavuFirst = tavuPre any_diph

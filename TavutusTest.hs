@@ -2,7 +2,7 @@
 ------------------------------------------------------------------------------
 -- File:          
 -- Creation Date:
--- Last Modified: Oct 25 2013 [01:12:56]
+-- Last Modified: Oct 25 2013 [02:10:20]
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 
@@ -11,44 +11,48 @@ import Data.Monoid
 import Control.Applicative
 import Test.HUnit
 
-psuc :: String -> Test
-psuc s = TestCase $ case tavutaRuno s of
-    Right _ -> return ()
-    Left er -> assertFailure $
-        "ParseError when expecting success on " <> s <> ": " <> show er
-
-exsuc :: (String, [Tavu]) -> Test
+exsuc :: (String, Runo) -> Test
 exsuc (s, expected) = TestCase
-    $ either (\er -> assertFailure $ "ParseError on " ++ s ++ ": " ++ show er)
+    $ either (\er -> assertFailure $
+                "ParseError on " ++ s ++ ": " ++ show er)
              (\calc -> if expected == calc
                         then return ()
-                        else assertFailure $ "Expected: "
+                        else assertFailure $ "=== " ++ s ++ " === Expected: "
                             ++ show expected ++ ".  Parsed: "
                             ++ show calc)
-    $ (concat . concat) <$> tavutaRuno s
+    $ tavutaRuno s
 
-successes = [ "" ]
-
-exact = [ ("a o e i u y ö ä", ["a","o","e","i","u","y","ö","ä"])
+exact = [ ("a o e i u y ö ä"
+          , [[["a"],["o"],["e"],["i"],["u"],["y"],["ö"],["ä"]]] )
 
         -- Weak diphthongs begin
-        , ("mieti",  ["mie", "ti"])
-        , ("nuotio", ["nuo", "ti", "o"])
-        , ("yössä",  ["yös", "sä"])
-        , ("suomuin", ["suo", "muin"])
+        , ("mieti",     [[["mie", "ti"     ]]])
+        , ("nuotio",    [[["nuo", "ti", "o"]]])
+        , ("yössä",     [[["yös", "sä"     ]]])
+        , ("suomuin",   [[["suo", "muin"   ]]])
 
         -- Weak diphtongs not begin
-        , ("värien",      ["vä", "ri", "en"])
-        , ("nuottien",    ["nuot", "ti", "en"])
+        , ("värien",      [[["vä", "ri", "en"  ]]])
+        , ("nuottien",    [[["nuot", "ti", "en"]]])
 
         -- Weak diphtong begins a compound work
-        , ("katovuosi",   ["ka", "to", "vuo", "si"])
-        , ("asfalttitie", ["as","falt","ti","tie"])
+        , ("katovuosi",   [[["ka", "to", "vuo", "si"   ]]])
+        , ("asfalttitie", [[["as", "falt", "ti", "tie" ]]])
+
+        -- Poem separator
+        , (""  ,   [ [] ])
+        , (";" ,   [ [],[] ])
+        , (";;",   [ [],[] ])
+        , (" ;; ", [ [],[] ])
+        , ("a;",   [ [["a"]], [] ])
+        , (";;a",  [ [], [["a"]] ])
+        , (";a;",  [ [], [["a"]], [] ])
+
+        , ( "eka ; toka ;;; kolmas"
+          , [ [["e","ka"]],[["to","ka"]],[["kol","mas"]]] )
         ]
 
 tests = TestList $
-    [ TestLabel "Successes" $ TestList (map psuc successes)
-    , TestLabel "Exact" $ TestList (map exsuc exact)
-    ]
+    [ TestLabel "Exact" $ TestList (map exsuc exact) ]
 
 main = runTestTT tests
