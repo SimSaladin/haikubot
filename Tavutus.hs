@@ -100,8 +100,9 @@ caseAlt      _ = error "Unhandled input"
 -- * Parsers
 
 runo :: Parser Runo
-runo = sepEndBy sae . many1 $
-    between (many space) (many space) $ many1 (char ';' <|> char '/' <?> "a säe")
+runo = many space >> sepEndBy sae runoSeparator
+    where runoSeparator = many1 . between (many space) (many space) $
+                                  many1 (char ';' <|> char '/' <?> "a säe")
 
 sae :: Parser Sae
 sae = catMaybes <$> sepEndBy sanaLike (many1 space)
