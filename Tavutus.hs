@@ -62,7 +62,7 @@ instance Show Tavu where
 -- ** Characters
 
 consonants, vowels', vowels :: [Char]
-consonants = "BCDFGHJKLMNPRSTVZXbcdfghjklmnŋprsštvzžx"
+consonants = "BCDFGHJKLMNPRSTVWZXbcdfghjklmnŋprsštvwzžx"
 vowels' = "aeiouyäö"
 vowels  = (++) <*> map toUpper $ vowels'
 
