@@ -5,13 +5,15 @@
 -- Created By: Samuli Thomasson [SimSaladin] samuli.thomassonAtpaivola.fi
 ------------------------------------------------------------------------------
 module Haikubot.Main 
-  ( mainWithCLI
+  ( mainBare
+  , mainWithCLI
   , defaultConfig
   -- * Re-exports
   , Basics(..)
   ) where
 
 import Data.Map (fromList, empty)
+import qualified Data.Map as M
 
 import Control.Concurrent.STM
 import Haikubot
@@ -21,6 +23,7 @@ import Haikubot.Plugins.Runot
 import Haikubot.Plugins.Basics
 
 import System.IO.Unsafe
+
 
 -- | Main entry point.
 --
@@ -41,6 +44,17 @@ defaultConfig = Config
 
 runot :: Runot
 runot = Runot ["#haiku", "#haiku-testing"]
-              "/home/sim/docs/haikut.txt"
+              "/home/tk/haikubot/haikut.txt"
               empty
               (unsafePerformIO $ newTMVarIO empty)
+
+mainBare :: Config -> IO ()
+mainBare conf = runHandler (readRC >> waitConnections) conf
+
+waitConnections :: Handler ()
+waitConnections = do
+  botData <- getBotData
+  connectionsLeft <- liftIO . atomically $ do
+    connections <- readTVar $ botConnections botData
+    return $ not $ M.null connections
+  if connectionsLeft then waitConnections else return ()

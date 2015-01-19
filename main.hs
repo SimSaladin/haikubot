@@ -8,4 +8,5 @@
 import Haikubot.Main
 
 main :: IO ()
-main = mainWithCLI $ defaultConfig
+-- main = mainWithCLI $ defaultConfig
+main = mainBare defaultConfig
