@@ -129,12 +129,12 @@ type Plugins = Map.Map Text Plugin
 
 -- | Handler monad.
 newtype Handler a = Handler { runH :: ReaderT BotData IO a }
-  deriving (Functor, Monad, MonadIO, MonadReader BotData)
+  deriving (Functor, Applicative, Monad, MonadIO, MonadReader BotData)
 
 -- | The action monad is provided to simplify plugin writing. It's a MaybeT over
 -- a ReaderT.
 newtype Action p a = Action { runA :: ErrorT String (ReaderT (ActionData p) Handler) a }
-  deriving (Functor, Monad, MonadIO, MonadPlus, MonadReader (ActionData p), MonadError String)
+  deriving (Functor, Applicative, Alternative, Monad, MonadIO, MonadPlus, MonadReader (ActionData p), MonadError String)
 
 -- | Run a handler with empty connections.
 runHandler :: Handler a -> Config -> IO a
