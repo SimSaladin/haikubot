@@ -25,7 +25,7 @@ import           Control.Applicative
 import           Data.Foldable as Foldable
 import           Control.Concurrent     (forkIO, ThreadId)
 import           Control.Concurrent.STM
-import           Control.Exception      (bracket_)
+import           Control.Exception      (bracket_, handle, SomeException)
 import           Control.Monad
 import           Text.Printf            (printf)
 import           Network                ( PortID, connectTo )
@@ -59,25 +59,30 @@ makeConnection :: ConId   -- ^ Identifier to use
                -> String  -- ^ Server
                -> PortID  -- ^ Port
                -> (Con -> Handler ()) -- ^ Listener
-               -> Handler (Either Text ThreadId) -- ^ ConId of the newly created connection.
+               -> Handler (Either Text ThreadId)
 makeConnection conId server port listen = do
-    -- check if we already have a connection with a name
-    exists <- liftM (Map.member conId) getConnections
-    f <- liftM (flip runHandler') getBotData
-    if exists
+    connections <- getConnections
+    botData <- getBotData
+    if Map.member conId connections
       then return $ Left "Connection with same identifier exists!"
-      else liftM Right $ liftIO $ do
-          h <- notified $ connectTo server port
-          hSetBuffering h NoBuffering
-          hSetEncoding h utf8
-          let con = Con h server port ""
-          forkIO $ (bracket_ <$> f . insertCon conId
-                             <*> f . deleteCon conId
-                             <*> f . listen) con
+      else liftM Right . liftIO . forkIO . forever . handle onError $ do
+
+              h <- notified $ connectTo server port
+              hSetBuffering h NoBuffering
+              hSetEncoding h utf8
+
+              let runner = flip runHandler' botData
+                  go     = bracket_ <$> runner . insertCon conId
+                                    <*> runner . deleteCon conId
+                                    <*> runner . listen
+
+              go $ Con h server port ""
   where
-    notified = bracket_
-      (printf "Connecting to %s..." server >> hFlush stdout)
-      (T.putStrLn "Connected")
+    notified = bracket_ (printf "Connecting to %s..." server >> hFlush stdout)
+                        (T.putStrLn "Connected")
+
+    onError :: SomeException -> IO ()
+    onError err = printf "Server %s connection closed: %s " server (show err) -- TODO: info lvl log msg
 
 getCon :: ConId -> Handler (Maybe Con)
 getCon conId = liftM (Map.lookup conId) getConnections 

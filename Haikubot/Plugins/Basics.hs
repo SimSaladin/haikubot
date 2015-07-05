@@ -23,16 +23,7 @@ instance HaikuPlugin Basics where
 
     handleCmd ("rawirc" , xs         ) = writeRaw $ T.intercalate " " xs
     handleCmd ("quit"   , _          ) = liftHandler exit >> stop
-    handleCmd ("connect", conId:server:port:nick:user:real) = do
-        res <- liftHandler $ makeConnection conId (T.unpack server) port' exec
-        case res of
-            Left err -> liftHandler (logErr err) >> stop
-            Right _  -> reply $ "Connection to " <> conId <> " established."
-      where
-        port' = PortNumber $ fromIntegral (read $ T.unpack port :: Integer)
-        real' = T.intercalate " " real
-        exec con = greet con nick user real' >> listener con
-
+    handleCmd ("connect", conId:server:port:nick:user:real) = connect conId server port nick user (T.intercalate " " real)
     handleCmd ("connect", _) = reply "Syntax: connect <identifier> <server> <port> <nick> <user> <realname>"
     handleCmd (_        , _) = noop
 
@@ -48,12 +39,23 @@ instance HaikuPlugin Basics where
                     liftHandler $ runCmd con (Just msg) cmd
                     stop
 
-listener :: Con -> Handler ()
-listener con = forever $ do
-    line <- readLine' con
-    let cmd = parse line
-    unless (mCode cmd == "PING") $ logInfo line
-    runMsg con cmd
+-- | Connect to the server, tell our nick and user and start the listen
+-- loop in a new thread.
+connect :: Text -- ^ connection id
+        -> Text -- ^ server domain
+        -> Text -- ^ Server port
+        -> Text -- ^ Nick
+        -> Text -- ^ User name
+        -> Text -- ^ Real name
+        -> Action Basics Res
+connect conId server port nick user real = do
+    res <- liftHandler $ makeConnection conId (T.unpack server) port' exec
+    case res of
+        Left err -> liftHandler (logErr err) >> stop
+        Right _  -> reply $ "Connection to " <> conId <> " established."
+  where
+    port' = PortNumber $ fromIntegral (read $ T.unpack port :: Integer)
+    exec con = greet con nick user real >> listener con
 
 greet :: Con
       -> Text -- ^ nick
@@ -64,3 +66,9 @@ greet con nick user real = do
     writeCmd' (MNick nick) con
     writeCmd' (MUser user "0" real) con
 
+listener :: Con -> Handler ()
+listener con = forever $ do
+    line <- readLine' con
+    let cmd = parse line
+    unless (mCode cmd == "PING") $ logInfo line
+    runMsg con cmd
