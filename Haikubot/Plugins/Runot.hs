@@ -23,7 +23,6 @@ import           Data.Maybe
 import qualified Data.Text        as T
 import           System.Directory (doesFileExist)
 import           System.Random    (randomIO)
-import           System.Locale
 
 if' :: Bool -> a -> a -> a
 if' ehto sitten muuten = if ehto then sitten else muuten

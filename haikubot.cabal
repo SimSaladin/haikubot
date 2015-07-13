@@ -47,5 +47,4 @@ executable haikubot
                       , text
                       , transformers
                       , mtl
-                      , time
-                      , old-locale
+                      , time        >= 1.5
