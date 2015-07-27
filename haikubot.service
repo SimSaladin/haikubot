@@ -1,0 +1,14 @@
+[Unit]
+Description=Irc bot for validating haikus
+After=network.target
+
+[Service]
+Type=simple
+User=tk
+Group=users
+Restart=always
+WorkingDirectory=/home/tk/coding/haikubot
+ExecStart=/home/tk/coding/haikubot/dist/build/haikubot/haikubot haikubot_mursu.rc
+
+[Install]
+WantedBy=multi-user.target
