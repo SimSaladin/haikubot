@@ -57,6 +57,7 @@ import           Data.Text                      (Text)
 import qualified Data.Map               as      Map
 import           Control.Applicative
 import           Control.Monad
+import           Control.Concurrent.MVar
 import           Control.Concurrent.STM
 import           Network                        (PortID)
 import           System.IO                      (Handle)
@@ -71,8 +72,9 @@ data Config = Config
 
 -- | Internal data shared by threads.
 data BotData = BotData
-  { botConfig      :: TVar Config
-  , botConnections :: TVar Connections
+  { botConfig          :: TVar Config
+  , botConnections     :: TVar Connections
+  , botInternalChannel :: MVar Text -- ^ Communication channel to the main thread; see @Main.monitor@.
   }
 
 -- | Additional data available n plugins' functions.
@@ -141,7 +143,8 @@ runHandler :: Handler a -> Config -> IO a
 runHandler handler conf = do
     cons  <- atomically $ newTVar Map.empty
     conf' <- atomically $ newTVar conf
-    runHandler' handler $ BotData conf' cons
+    chan  <- newEmptyMVar
+    runHandler' handler $ BotData conf' cons chan
 
 runHandler' :: Handler a -> BotData -> IO a
 runHandler' handler = runReaderT (runH handler)

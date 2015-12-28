@@ -12,16 +12,16 @@ module Haikubot.Main
   , Basics(..)
   ) where
 
-import Data.Map (fromList, empty)
-import qualified Data.Map as M
-
-import Control.Concurrent.STM
 import Haikubot
 import Haikubot.Settings
 import Haikubot.CLI
 import Haikubot.Plugins.Runot
 import Haikubot.Plugins.Basics
 
+import Data.Map (fromList, empty)
+import qualified Data.Map as M
+import Control.Concurrent.STM
+import Control.Concurrent.MVar
 import System.IO.Unsafe
 
 
@@ -48,13 +48,13 @@ runot = Runot ["#haiku", "#haiku-testing"]
               empty
               (unsafePerformIO $ newTMVarIO empty)
 
+-- | Read configuration file and start without CLI.
 mainBare :: Config -> IO ()
-mainBare conf = runHandler (readRC >> waitConnections) conf
+mainBare conf = runHandler (readRC >> monitor) conf
 
-waitConnections :: Handler ()
-waitConnections = do
+-- | TODO: replace with an internal dbus hontrol channel.
+monitor :: Handler ()
+monitor = do
   botData <- getBotData
-  connectionsLeft <- liftIO . atomically $ do
-    connections <- readTVar $ botConnections botData
-    return $ not $ M.null connections
-  if connectionsLeft then waitConnections else return ()
+  let go = liftIO (takeMVar (botInternalChannel botData) >>= print) >> go
+  go

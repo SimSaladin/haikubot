@@ -66,7 +66,7 @@ makeConnection conId server port listen = do
     if Map.member conId connections
       then return $ Left "Connection with same identifier exists!"
       else liftM Right . liftIO . forkIO . forever . handle onError $ do
-
+              -- loop body (forever); auto-reconnect
               h <- notified $ connectTo server port
               hSetBuffering h NoBuffering
               hSetEncoding h utf8
